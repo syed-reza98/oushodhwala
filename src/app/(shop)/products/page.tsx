@@ -29,11 +29,6 @@ export default async function ProductsPage() {
           </li>
         ))}
       </ul>
-      {rows.length === 0 && (
-        <p className="mt-6 text-sm text-muted-foreground">
-          No products yet. Run <code>npm run db:seed</code>.
-        </p>
-      )}
     </div>
   );
 }

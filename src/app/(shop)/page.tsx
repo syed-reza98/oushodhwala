@@ -9,7 +9,7 @@ export default async function HomePage() {
     <div className="pt-4">
       <h1 className="font-display text-2xl font-extrabold text-navy">ঔষধওয়ালা</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Next.js 16 + XAMPP MySQL — migration in progress. UI chrome preserved.
+        Next.js 16 + XAMPP MySQL — migration checkpoint
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
@@ -25,10 +25,7 @@ export default async function HomePage() {
           About
         </Link>
       </div>
-      <h2 className="mt-8 font-display text-lg font-extrabold text-navy">
-        Featured
-      </h2>
-      <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {products.map((p) => (
           <li
             key={p.id}
