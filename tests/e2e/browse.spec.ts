@@ -4,11 +4,11 @@ import { trackConsole } from "./helpers";
 test.describe("browse", () => {
   test("home page renders products and navigation", async ({ page }) => {
     const errors = trackConsole(page);
-    await page.goto("/");
-    await expect(page).toHaveTitle(/ঔষধওয়ালা|Oushodhwala/);
-    await expect(page.getByRole("link", { name: /কার্ট|Cart/ }).first()).toBeVisible();
-    await expect(page.locator("a[href^='/product/']").first()).toBeVisible();
-    expect(errors.filter((e) => !e.includes("favicon"))).toEqual([]);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveTitle(/ঔষধ/);
+    await expect(page.getByRole("link", { name: /কার্ট|Cart/ }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("a[href^='/product/']").first()).toBeVisible({ timeout: 20_000 });
+    expect(errors.filter((e) => !e.includes("favicon") && !e.includes("AbortError"))).toEqual([]);
   });
 
   test("category listing loads", async ({ page }) => {

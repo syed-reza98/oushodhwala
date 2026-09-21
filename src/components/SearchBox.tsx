@@ -99,8 +99,33 @@ export function SearchBox({ className = "" }: { className?: string }) {
   const showSkeleton = isFetching && !data;
 
   const rows = useMemo(() => {
-    if (!enabled || scope === "service") return [];
-    const list = [...(data?.rows ?? [])];
+    if (!enabled || scope === "service")
+      return [] as {
+        id: string;
+        name: string;
+        en?: string;
+        brand?: string;
+        generic?: string;
+        price?: number;
+        image?: string;
+        emoji?: string;
+        strength?: string;
+        form?: string;
+        medicineImage?: string;
+      }[];
+    const list = (data?.rows ?? []).map((r) => ({
+      id: String(r.id ?? ""),
+      name: String(r.name ?? ""),
+      en: String(r.en ?? ""),
+      brand: String(r.brand ?? ""),
+      generic: String(r.generic ?? ""),
+      price: Number(r.price ?? 0),
+      image: String(r.imageUrl ?? r.image_url ?? r.image ?? ""),
+      medicineImage: String(r.medicineImageUrl ?? r.medicine_image_url ?? ""),
+      emoji: String(r.emoji ?? "💊"),
+      strength: String(r.strength ?? ""),
+      form: String(r.form ?? ""),
+    }));
     list.sort(
       (a, b) =>
         relevance(debounced, a.name, a.en, a.brand, a.generic) - relevance(debounced, b.name, b.en, b.brand, b.generic),
@@ -134,22 +159,23 @@ export function SearchBox({ className = "" }: { className?: string }) {
     saveTerm(t);
     setOpen(false);
     setActive(-1);
-    router.push({ to: "/products", search: { q: t, category: "all", sort: "popular" } });
+    const p = new URLSearchParams({ q: t, category: "all", sort: "popular" });
+    router.push(`/products?${p.toString()}`);
   };
 
   const goProduct = (id: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    router.push({ to: "/product/$id", params: { id } });
+    router.push(`/product/${encodeURIComponent(id)}`);
   };
 
   const goService = (slug: string, route: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    if (route === "/home-diagnostics") void router.push({ to: "/home-diagnostics" });
-    else void router.push({ to: "/home-services", search: { s: slug } });
+    if (route === "/home-diagnostics") router.push("/home-diagnostics");
+    else router.push(`/home-services?s=${encodeURIComponent(slug)}`);
   };
 
   const total = rows.length + services.length;
@@ -317,7 +343,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
                   >
                     <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-lg">
                       <ProductImage
-                        src={r.medicine_image_url || r.image_url}
+                        src={r.medicineImage || r.image}
                         alt={r.name}
                         emoji={r.emoji}
                         ratio="square"

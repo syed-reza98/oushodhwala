@@ -117,7 +117,7 @@ export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mo
             onClick={async () => {
               setOpen(false);
               await signOut();
-              void router.push({ to: "/", replace: true });
+              router.push("/");
             }}
             className={`${itemCls} mt-1 border-t border-border text-sale`}
           >

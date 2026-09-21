@@ -25,32 +25,51 @@ import {
   Home as HomeIcon,
   Microscope,
   ListOrdered,
-
 } from "lucide-react";
 import { useCatalog } from "@/lib/catalog-db";
 import { useLang, pick } from "@/lib/lang";
 import { useAuth } from "@/hooks/useAuth";
 import { BrandLogo } from "@/components/BrandLogo";
 
-type Item = { t: string; to: string; icon: typeof Store; search?: Record<string, string> };
+type Item = { t: string; href: string; icon: typeof Store };
 
 function useItems() {
   const { lang } = useLang();
   const en = lang === "en";
   const items: Item[] = [
-    { t: en ? "Home" : "হোম", to: "/", icon: HomeIcon },
-    { t: en ? "Store" : "স্টোর", to: "/products", icon: Store, search: { q: "", category: "all", sort: "popular" } },
-    { t: en ? "Medicine List" : "ঔষধের তালিকা", to: "/medicines", icon: ListOrdered },
-
-    { t: en ? "Lab Test" : "ল্যাব টেস্ট", to: "/lab-test", icon: FlaskConical },
-    { t: en ? "Home Diagnostics" : "বাসায় ডায়াগনস্টিক", to: "/home-diagnostics", icon: Microscope },
-    { t: en ? "Home Services" : "হোম সার্ভিস", to: "/home-services", icon: HeartHandshake },
-    { t: en ? "Doctors" : "ডাক্তার", to: "/doctor-consultation", icon: Stethoscope },
-    { t: en ? "Prescription" : "প্রেসক্রিপশন", to: "/prescription", icon: Upload },
-    { t: en ? "Offers" : "অফার", to: "/offers", icon: Tag },
-    { t: en ? "Help" : "সহায়তা", to: "/help", icon: LifeBuoy },
+    { t: en ? "Home" : "হোম", href: "/", icon: HomeIcon },
+    {
+      t: en ? "Store" : "স্টোর",
+      href: "/products?q=&category=all&sort=popular",
+      icon: Store,
+    },
+    { t: en ? "Medicine List" : "ঔষধের তালিকা", href: "/medicines", icon: ListOrdered },
+    { t: en ? "Lab Test" : "ল্যাব টেস্ট", href: "/lab-test", icon: FlaskConical },
+    {
+      t: en ? "Home Diagnostics" : "বাসায় ডায়াগনস্টিক",
+      href: "/home-diagnostics",
+      icon: Microscope,
+    },
+    {
+      t: en ? "Home Services" : "হোম সার্ভিস",
+      href: "/home-services",
+      icon: HeartHandshake,
+    },
+    {
+      t: en ? "Doctors" : "ডাক্তার",
+      href: "/doctor-consultation",
+      icon: Stethoscope,
+    },
+    { t: en ? "Prescription" : "প্রেসক্রিপশন", href: "/prescription", icon: Upload },
+    { t: en ? "Offers" : "অফার", href: "/offers", icon: Tag },
+    { t: en ? "Help" : "সহায়তা", href: "/help", icon: LifeBuoy },
   ];
   return items;
+}
+
+function serviceHref(serviceRoute: string | undefined, slug: string) {
+  if (serviceRoute === "/home-diagnostics") return "/home-diagnostics";
+  return `/home-services?s=${encodeURIComponent(slug)}`;
 }
 
 /** ডেস্কটপ মেনুবার — ক্যাটাগরি মেগা-ড্রপডাউনসহ */
@@ -86,8 +105,7 @@ export function DesktopMenu() {
                 {productCats.map((c) => (
                   <Link
                     key={c.slug}
-                    to="/category/$slug"
-                    params={{ slug: c.slug }}
+                    href={`/category/${encodeURIComponent(c.slug)}`}
                     className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-xs font-semibold text-navy hover:bg-secondary"
                   >
                     <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-secondary text-base">
@@ -104,8 +122,7 @@ export function DesktopMenu() {
                 {serviceCats.map((c) => (
                   <Link
                     key={c.slug}
-                    to={c.serviceRoute === "/home-diagnostics" ? "/home-diagnostics" : "/home-services"}
-                    search={c.serviceRoute === "/home-diagnostics" ? {} : { s: c.slug }}
+                    href={serviceHref(c.serviceRoute, c.slug)}
                     className="rounded-lg bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-primary-dark hover:bg-primary/10"
                   >
                     {c.emoji} {pick(lang, c.bn, c.en)}
@@ -123,16 +140,12 @@ export function DesktopMenu() {
         </div>
 
         {items.map((m) => {
-          const active = m.to === "/" ? pathname === "/" : pathname.startsWith(m.to);
+          const active = m.href === "/" ? pathname === "/" : pathname.startsWith(m.href.split("?")[0]!);
           const cls = `flex items-center gap-1.5 border-b-2 px-3 py-3 ${
             active ? "border-primary text-primary" : "border-transparent text-navy/80 hover:text-primary"
           }`;
-          return m.search ? (
-            <Link key={m.t} to={m.to} search={m.search} className={cls}>
-              <m.icon className="h-4 w-4" /> {m.t}
-            </Link>
-          ) : (
-            <Link key={m.t} to={m.to} className={cls}>
+          return (
+            <Link key={m.t} href={m.href} className={cls}>
               <m.icon className="h-4 w-4" /> {m.t}
             </Link>
           );
@@ -174,9 +187,9 @@ export function MobileMenu() {
   }, [open]);
 
   const extra: Item[] = [
-    { t: en ? "Wishlist" : "উইশলিস্ট", to: "/wishlist", icon: Heart },
-    { t: en ? "Orders" : "অর্ডার", to: "/orders", icon: FileText },
-    { t: en ? "Account" : "একাউন্ট", to: "/account", icon: User },
+    { t: en ? "Wishlist" : "উইশলিস্ট", href: "/wishlist", icon: Heart },
+    { t: en ? "Orders" : "অর্ডার", href: "/orders", icon: FileText },
+    { t: en ? "Account" : "একাউন্ট", href: "/account", icon: User },
   ];
 
   return (
@@ -221,27 +234,15 @@ export function MobileMenu() {
                 </div>
               </div>
               <div className="space-y-1">
-
-                {items.concat(extra).map((m) =>
-                  m.search ? (
-                    <Link
-                      key={m.t}
-                      to={m.to}
-                      search={m.search}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-navy hover:bg-secondary"
-                    >
-                      <m.icon className="h-4 w-4 text-primary" /> {m.t}
-                    </Link>
-                  ) : (
-                    <Link
-                      key={m.t}
-                      to={m.to}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-navy hover:bg-secondary"
-                    >
-                      <m.icon className="h-4 w-4 text-primary" /> {m.t}
-                    </Link>
-                  ),
-                )}
+                {items.concat(extra).map((m) => (
+                  <Link
+                    key={m.t}
+                    href={m.href}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-navy hover:bg-secondary"
+                  >
+                    <m.icon className="h-4 w-4 text-primary" /> {m.t}
+                  </Link>
+                ))}
                 {isAdmin && (
                   <Link
                     href="/admin"
@@ -259,8 +260,7 @@ export function MobileMenu() {
                 {productCats.map((c) => (
                   <Link
                     key={c.slug}
-                    to="/category/$slug"
-                    params={{ slug: c.slug }}
+                    href={`/category/${encodeURIComponent(c.slug)}`}
                     className="flex items-center gap-2 rounded-xl border border-border px-2.5 py-2 text-[11px] font-semibold text-navy"
                   >
                     <span className="text-base">{c.emoji}</span>
@@ -276,8 +276,7 @@ export function MobileMenu() {
                 {serviceCats.map((c) => (
                   <Link
                     key={c.slug}
-                    to={c.serviceRoute === "/home-diagnostics" ? "/home-diagnostics" : "/home-services"}
-                    search={c.serviceRoute === "/home-diagnostics" ? {} : { s: c.slug }}
+                    href={serviceHref(c.serviceRoute, c.slug)}
                     className="flex items-center gap-2 rounded-xl border border-border px-2.5 py-2 text-[11px] font-semibold text-navy"
                   >
                     <span className="text-base">{c.emoji}</span>

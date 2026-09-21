@@ -11,21 +11,84 @@ export const ROLE_LABEL: Record<AppRole, { bn: string; en: string; desc: string 
   user: { bn: "সাধারণ ব্যবহারকারী", en: "Customer", desc: "শুধু নিজের অর্ডার ও প্রোফাইল" },
 };
 
+/**
+ * Legacy tab ids → current AdminClient GROUPS ids.
+ * Folded panels (batches/stockadj → stock, coa/journal → finance, etc.) stay reachable.
+ */
+const TAB_ALIASES: Record<string, string[]> = {
+  inventory: ["stock", "products"],
+  suppliers: ["procure"],
+  purchases: ["procure"],
+  batches: ["stock"],
+  stockadj: ["stock"],
+  transfers: ["branches"],
+  erpreports: ["reports"],
+  expenses: ["finance"],
+  coa: ["finance"],
+  journal: ["finance"],
+};
+
 /** ভূমিকা অনুযায়ী ড্যাশবোর্ডে কোন ট্যাবগুলো দেখা যাবে ("*" = সব) */
 export const ROLE_TABS: Record<AppRole, string[]> = {
   super_admin: ["*"],
   admin: ["*"],
   erp_manager: [
-    "dash", "workspace", "orders", "inventory", "products", "suppliers", "purchases",
-    "batches", "erpreports", "audit", "monitor", "health",
-    "stockadj", "stockcount", "labels", "branches", "transfers", "zones", "pos",
+    "dash",
+    "workspace",
+    "orders",
+    "products",
+    "stock",
+    "stockcount",
+    "labels",
+    "procure",
+    "reports",
+    "audit",
+    "monitor",
+    "health",
+    "branches",
+    "zones",
+    "pos",
+    "apihub",
+    "tests",
   ],
   accountant: [
-    "dash", "workspace", "orders", "accounts", "reports", "returns", "loyalty",
-    "expenses", "coa", "journal", "daybook", "financials", "party",
+    "dash",
+    "workspace",
+    "orders",
+    "accounts",
+    "reports",
+    "returns",
+    "loyalty",
+    "finance",
+    "daybook",
+    "financials",
+    "party",
+    "audit",
   ],
-  support_agent: ["dash", "workspace", "support", "orders", "customers", "rx", "consults", "returns", "reviews"],
-  pharmacist: ["dash", "workspace", "pos", "rx", "consults", "products", "inventory", "lab", "diagnostics", "doctors", "labels"],
+  support_agent: [
+    "dash",
+    "workspace",
+    "support",
+    "orders",
+    "customers",
+    "rx",
+    "consults",
+    "returns",
+    "reviews",
+  ],
+  pharmacist: [
+    "dash",
+    "workspace",
+    "pos",
+    "rx",
+    "consults",
+    "products",
+    "stock",
+    "lab",
+    "diagnostics",
+    "doctors",
+    "labels",
+  ],
   rider: [],
   user: [],
 };
@@ -34,6 +97,11 @@ export const ROLE_TABS: Record<AppRole, string[]> = {
 export function allowedTabs(roles: AppRole[]): "all" | Set<string> {
   if (roles.some((r) => ROLE_TABS[r]?.includes("*"))) return "all";
   const set = new Set<string>();
-  roles.forEach((r) => (ROLE_TABS[r] ?? []).forEach((t) => set.add(t)));
+  roles.forEach((r) => {
+    for (const t of ROLE_TABS[r] ?? []) {
+      set.add(t);
+      for (const mapped of TAB_ALIASES[t] ?? []) set.add(mapped);
+    }
+  });
   return set;
 }

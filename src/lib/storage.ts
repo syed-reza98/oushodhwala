@@ -1,39 +1,36 @@
-import { supabase } from "@/integrations/supabase/client";
+/** Local upload helpers — replaces Supabase Storage in the UI layer. */
 
-/** সংরক্ষিত ফাইল রেফারেন্স সরাসরি লিংক নাকি স্টোরেজ পাথ */
 export function isExternalUrl(ref: string | null | undefined) {
   return !!ref && /^https?:\/\//i.test(ref);
 }
 
-/**
- * প্রাইভেট বাকেটের ফাইলের জন্য সাইনড ইউআরএল তৈরি করে।
- * ref যদি সরাসরি http লিংক হয়, সেটিই ফেরত দেয়।
- */
-export async function resolveFileUrl(bucket: string, ref: string | null | undefined, expiresIn = 60 * 60) {
+const PUBLIC_BASE = process.env.NEXT_PUBLIC_UPLOAD_BASE || "/uploads";
+
+/** Public URL for a stored path (local disk via /uploads). */
+export function resolveFileUrl(bucket: string, ref: string | null | undefined) {
   if (!ref) return "";
   if (isExternalUrl(ref)) return ref;
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(ref, expiresIn);
-  return data?.signedUrl ?? "";
+  const clean = ref.replace(/^\/+/, "");
+  if (clean.startsWith(`${bucket}/`)) return `${PUBLIC_BASE}/${clean}`;
+  return `${PUBLIC_BASE}/${bucket}/${clean}`;
 }
 
-/** ডাউনলোড হিসেবে সাইনড ইউআরএল */
-export async function resolveDownloadUrl(bucket: string, ref: string | null | undefined, fileName?: string) {
-  if (!ref) return "";
-  if (isExternalUrl(ref)) return ref;
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(ref, 60 * 60, {
-    download: fileName ?? ref.split("/").pop() ?? true,
-  });
-  return data?.signedUrl ?? "";
+export function resolveDownloadUrl(bucket: string, ref: string | null | undefined, _fileName?: string) {
+  return resolveFileUrl(bucket, ref);
 }
 
-/** ফাইল আপলোড করে স্টোরেজ পাথ ফেরত দেয় */
-export async function uploadFile(bucket: string, path: string, file: Blob, contentType?: string) {
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    upsert: true,
-    ...(contentType ? { contentType } : {}),
-  });
-  if (error) throw error;
-  return path;
+/** Browser upload via `/api/upload` Route Handler. */
+export async function uploadFile(bucket: string, _path: string, file: Blob, _contentType?: string) {
+  const fd = new FormData();
+  fd.set("bucket", bucket);
+  fd.set("file", file instanceof File ? file : new File([file], "upload.bin"));
+  const res = await fetch("/api/upload", { method: "POST", body: fd });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "upload failed");
+  }
+  const saved = (await res.json()) as { path: string; url?: string };
+  return saved.path;
 }
 
 export function safeName(name: string) {

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductById } from "@/server/actions/catalog";
+import { ProductReviews } from "@/components/ProductReviews";
+import { RecordMedicineView } from "@/components/RecordMedicineView";
+import { RefillReminder } from "@/components/RefillReminder";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +38,9 @@ export default async function ProductDetailPage({
         </p>
       )}
       <p className="mt-4 text-xs text-muted-foreground">Stock: {product.stock}</p>
+      <RecordMedicineView productId={product.id} />
+      <RefillReminder productId={product.id} productName={product.name} />
+      <ProductReviews productId={product.id} />
     </div>
   );
 }

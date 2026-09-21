@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, BellOff } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
 
@@ -18,13 +17,15 @@ export function RefillReminder({ productId, productName }: { productId: string; 
     queryKey: ["refill", productId, user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("refill_reminders")
-        .select("id, every_days, next_at, active")
-        .eq("product_id", productId)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
+      const res = await fetch(
+        `/api/refill-reminders?productId=${encodeURIComponent(productId)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error("refill fetch failed");
+      const data = (await res.json()) as {
+        item: { id: string; everyDays: number; nextAt: string; active: boolean } | null;
+      };
+      return data.item;
     },
   });
 
@@ -32,20 +33,20 @@ export function RefillReminder({ productId, productName }: { productId: string; 
     mutationFn: async () => {
       if (!user) throw new Error("auth");
       if (existing) {
-        const { error } = await supabase.from("refill_reminders").delete().eq("id", existing.id);
-        if (error) throw error;
+        const res = await fetch("/api/refill-reminders", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: existing.id }),
+        });
+        if (!res.ok) throw new Error("delete failed");
         return;
       }
-      const next = new Date();
-      next.setDate(next.getDate() + days);
-      const { error } = await supabase.from("refill_reminders").insert({
-        user_id: user.id,
-        product_id: productId,
-        product_name: productName,
-        every_days: days,
-        next_at: next.toISOString().slice(0, 10),
+      const res = await fetch("/api/refill-reminders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productId, productName, everyDays: days }),
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error("create failed");
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["refill"] }),
   });
@@ -62,7 +63,7 @@ export function RefillReminder({ productId, productName }: { productId: string; 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <p className="text-[11px] text-muted-foreground">
             {t("পরবর্তী মনে করিয়ে দেওয়া", "Next reminder")}:{" "}
-            <b>{new Date(existing.next_at).toLocaleDateString(t.en ? "en-US" : "bn-BD")}</b>
+            <b>{new Date(existing.nextAt).toLocaleDateString(t.en ? "en-US" : "bn-BD")}</b>
           </p>
           <button
             type="button"

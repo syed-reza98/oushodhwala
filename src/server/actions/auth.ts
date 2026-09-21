@@ -1,12 +1,16 @@
 "use server";
 
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { hash } from "bcryptjs";
-import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { AuthError } from "next-auth";
 import { signIn } from "@/server/auth/config";
 import { db } from "@/server/db";
-import { profiles, userRoles, users } from "@/server/db/schema";
+import { passwordResetTokens, profiles, userRoles, users } from "@/server/db/schema";
+
+function tokenHash(raw: string) {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export async function registerUser(input: {
   email: string;
@@ -64,4 +68,59 @@ export async function loginUser(input: { email: string; password: string }) {
     }
     throw err;
   }
+}
+
+/** Creates a reset token. Local: returns raw token for logging (no email provider). */
+export async function requestPasswordReset(emailRaw: string) {
+  const email = emailRaw.trim().toLowerCase();
+  if (!email) return { ok: false as const, error: "Email required" };
+
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  // Always claim success to avoid email enumeration
+  if (!user) return { ok: true as const, token: null as string | null };
+
+  const raw = randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + 60 * 60 * 1000);
+  await db.insert(passwordResetTokens).values({
+    id: randomUUID(),
+    userId: user.id,
+    tokenHash: tokenHash(raw),
+    expiresAt: expires.toISOString().slice(0, 23).replace("T", " "),
+  });
+
+  if (process.env.NODE_ENV !== "production") {
+    console.info(`[password-reset] ${email} token=${raw}`);
+  }
+
+  return { ok: true as const, token: process.env.NODE_ENV === "production" ? null : raw };
+}
+
+export async function resetPasswordWithToken(input: { token: string; password: string }) {
+  if (!input.token || input.password.length < 6) {
+    return { ok: false as const, error: "Invalid token or password" };
+  }
+
+  const now = new Date().toISOString().slice(0, 23).replace("T", " ");
+  const [row] = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(
+      and(
+        eq(passwordResetTokens.tokenHash, tokenHash(input.token)),
+        isNull(passwordResetTokens.usedAt),
+        gt(passwordResetTokens.expiresAt, now),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return { ok: false as const, error: "Token expired or invalid" };
+
+  const passwordHash = await hash(input.password, 10);
+  await db.update(users).set({ passwordHash }).where(eq(users.id, row.userId));
+  await db
+    .update(passwordResetTokens)
+    .set({ usedAt: now })
+    .where(eq(passwordResetTokens.id, row.id));
+
+  return { ok: true as const };
 }

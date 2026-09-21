@@ -42,8 +42,8 @@ export function RequireAuth({ children, staffOnly, roles }: Props) {
     } catch {
       /* ignore */
     }
-    void router.push({ to: "/auth", replace: true });
-  }, [loading, user, pathname, navigate]);
+    router.replace("/auth");
+  }, [loading, user, pathname, router]);
 
   if (loading) {
     return (

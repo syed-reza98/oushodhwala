@@ -22,7 +22,7 @@ export function ProductCard({ p }: { p: Product & { stock?: number; lowStock?: n
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] transition hover:border-primary/50 hover:shadow-[var(--shadow-elevated)]">
-      <Link href="/product/$id" params={{ id: p.id }} className="relative block shrink-0 overflow-hidden">
+      <Link href={`/product/${encodeURIComponent(p.id)}`} className="relative block shrink-0 overflow-hidden">
         <ProductImage src={p.image} alt={displayName} emoji={p.emoji} ratio="card" />
 
 
@@ -45,8 +45,7 @@ export function ProductCard({ p }: { p: Product & { stock?: number; lowStock?: n
       <div className="flex flex-1 flex-col p-3">
         <div className="flex items-start gap-1">
           <Link
-            href="/product/$id"
-            params={{ id: p.id }}
+            href={`/product/${encodeURIComponent(p.id)}`}
             className="line-clamp-2 min-w-0 text-xs font-bold leading-snug text-navy"
           >
             {displayName}

@@ -39,6 +39,10 @@ import {
   Megaphone,
   Award,
   UserCog,
+  Store,
+  MapPin,
+  ShieldCheck,
+  LayoutGrid,
 } from "lucide-react";
 
 export type AdminNavItem = { id: string; t: string; icon: string };
@@ -46,6 +50,7 @@ export type AdminNavGroup = { label: string; items: AdminNavItem[] };
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   dash: LayoutDashboard,
+  workspace: LayoutGrid,
   staff: UserCog,
   orders: ShoppingCart,
   inventory: Boxes,
@@ -71,6 +76,9 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   reports: BarChart3,
   campaigns: Megaphone,
   loyalty: Award,
+  branches: Store,
+  zones: MapPin,
+  perms: ShieldCheck,
 };
 
 export function AdminShell({

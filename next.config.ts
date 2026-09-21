@@ -8,10 +8,13 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "oushodhwala.lovable.app" },
     ],
   },
-  // Interim during migration: legacy components still being ported off TanStack/Supabase.
-  // Remove once Wave E completes and `rg '@tanstack|@supabase' src` is clean.
-  typescript: {
-    ignoreBuildErrors: true,
+  async rewrites() {
+    return [
+      {
+        source: "/uploads/:path*",
+        destination: "/api/uploads/:path*",
+      },
+    ];
   },
 };
 

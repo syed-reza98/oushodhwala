@@ -50,12 +50,8 @@
     "node_modules",
     "supabase",
     "tests",
-    "src/routes",
-    "src/start.ts",
-    "src/server.ts",
-    "src/routeTree.gen.ts",
-    "src/integrations",
-    "vite.config.ts",
+    "_legacy",
+    "docs/archive",
     "**/*.functions.ts",
     "**/*.server.ts"
   ]

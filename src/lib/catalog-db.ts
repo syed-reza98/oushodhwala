@@ -3,6 +3,8 @@ import { getCatalog } from "./catalog.functions";
 import {
   products as staticProducts,
   categories as staticCategories,
+  labTests as staticLabTests,
+  doctors as staticDoctors,
   type Product,
   type Category,
 } from "@/data/catalog";
@@ -142,54 +144,111 @@ const fallback: Catalog = {
   })),
   categories: staticCategories,
   offers: [],
-  labTests: [],
-  doctors: [],
+  labTests: staticLabTests.map((t) => ({
+    id: t.id,
+    bn: t.bn,
+    en: t.en,
+    price: t.price,
+    mrp: t.mrp,
+    group: t.group,
+    prep: t.prep,
+  })),
+  doctors: staticDoctors.map((d) => ({
+    id: d.id,
+    name: d.name,
+    spec: d.spec,
+    degree: d.degree,
+    exp: d.exp,
+    fee: d.fee,
+    emoji: d.emoji,
+    photo: "",
+    phone: "",
+    whatsapp: "",
+    videoUrl: "",
+    online: true,
+    workStart: "10:00",
+    workEnd: "22:00",
+    slotMinutes: 30,
+    workDays: [0, 1, 2, 3, 4, 5, 6],
+  })),
   settings: defaultSettings,
 };
 
-type ProductRow = Awaited<ReturnType<typeof getCatalog>>["products"][number];
+type ProductRow = Awaited<ReturnType<typeof getCatalog>>["products"][number] &
+  Record<string, unknown>;
+
+function pickStr(r: ProductRow, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = r[k];
+    if (typeof v === "string" && v.length) return v;
+  }
+  return "";
+}
+
+function pickNum(r: ProductRow, ...keys: string[]): number {
+  for (const k of keys) {
+    const v = Number(r[k]);
+    if (Number.isFinite(v)) return v;
+  }
+  return 0;
+}
+
+function normalizeWorkDays(raw: unknown): number[] {
+  const fallback = [0, 1, 2, 3, 4, 5, 6];
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  if (!Array.isArray(value)) return fallback;
+  const days = value.map(Number).filter((n) => Number.isFinite(n) && n >= 0 && n <= 6);
+  return days.length ? days : fallback;
+}
 
 export function mapProduct(r: ProductRow): ShopProduct {
   return {
-    id: r.id,
-    name: r.name,
-    en: r.en,
-    brand: r.brand,
-    generic: r.generic,
-    form: r.form,
-    pack: r.pack,
-    price: Number(r.price),
-    mrp: Number(r.mrp),
-    category: r.category,
-    rx: r.rx,
-    rating: Number(r.rating),
-    reviews: r.reviews,
-    emoji: r.emoji,
-    desc: r.description,
-    stock: r.stock,
-    lowStock: r.low_stock_threshold,
-    image: r.image_url ?? "",
-    medicineImage: (r as { medicine_image_url?: string }).medicine_image_url ?? "",
-    descEn: r.description_en ?? "",
-    indications: r.indications ?? "",
-    indicationsEn: r.indications_en ?? "",
-    dosage: r.dosage ?? "",
-    dosageEn: r.dosage_en ?? "",
-    sideEffects: r.side_effects ?? "",
-    sideEffectsEn: r.side_effects_en ?? "",
-    manufacturer: r.manufacturer ?? "",
-    strength: (r as { strength?: string }).strength ?? "",
-    baseName: (r as { base_name?: string }).base_name ?? "",
-    contraindications: (r as { contraindications?: string }).contraindications ?? "",
-    contraindicationsEn: (r as { contraindications_en?: string }).contraindications_en ?? "",
-    pregnancy: (r as { pregnancy?: string }).pregnancy ?? "",
-    pregnancyEn: (r as { pregnancy_en?: string }).pregnancy_en ?? "",
-    precautions: (r as { precautions?: string }).precautions ?? "",
-    precautionsEn: (r as { precautions_en?: string }).precautions_en ?? "",
-    therapeuticClass: (r as { therapeutic_class?: string }).therapeutic_class ?? "",
-    therapeuticClassEn: (r as { therapeutic_class_en?: string }).therapeutic_class_en ?? "",
-    storage: (r as { storage?: string }).storage ?? "",
-    storageEn: (r as { storage_en?: string }).storage_en ?? "",
+    id: String(r.id ?? ""),
+    name: pickStr(r, "name"),
+    en: pickStr(r, "en"),
+    brand: pickStr(r, "brand"),
+    generic: pickStr(r, "generic"),
+    form: pickStr(r, "form"),
+    pack: pickStr(r, "pack"),
+    price: pickNum(r, "price"),
+    mrp: pickNum(r, "mrp"),
+    category: pickStr(r, "category"),
+    rx: Boolean(r.rx),
+    rating: pickNum(r, "rating"),
+    reviews: pickNum(r, "reviews"),
+    emoji: pickStr(r, "emoji") || "💊",
+    desc: pickStr(r, "description", "desc"),
+    stock: pickNum(r, "stock"),
+    lowStock: pickNum(r, "lowStockThreshold", "low_stock_threshold") || 10,
+    image: pickStr(r, "imageUrl", "image_url"),
+    medicineImage: pickStr(r, "medicineImageUrl", "medicine_image_url"),
+    descEn: pickStr(r, "descriptionEn", "description_en"),
+    indications: pickStr(r, "indications"),
+    indicationsEn: pickStr(r, "indicationsEn", "indications_en"),
+    dosage: pickStr(r, "dosage"),
+    dosageEn: pickStr(r, "dosageEn", "dosage_en"),
+    sideEffects: pickStr(r, "sideEffects", "side_effects"),
+    sideEffectsEn: pickStr(r, "sideEffectsEn", "side_effects_en"),
+    manufacturer: pickStr(r, "manufacturer"),
+    strength: pickStr(r, "strength"),
+    baseName: pickStr(r, "baseName", "base_name"),
+    contraindications: pickStr(r, "contraindications"),
+    contraindicationsEn: pickStr(r, "contraindicationsEn", "contraindications_en"),
+    pregnancy: pickStr(r, "pregnancy"),
+    pregnancyEn: pickStr(r, "pregnancyEn", "pregnancy_en"),
+    precautions: pickStr(r, "precautions"),
+    precautionsEn: pickStr(r, "precautionsEn", "precautions_en"),
+    therapeuticClass: pickStr(r, "therapeuticClass", "therapeutic_class"),
+    therapeuticClassEn: pickStr(r, "therapeuticClassEn", "therapeutic_class_en"),
+    storage: pickStr(r, "storage"),
+    storageEn: pickStr(r, "storageEn", "storage_en"),
   };
 }
 
@@ -222,57 +281,57 @@ export function useCatalog(): Catalog {
             base_fee?: number | string;
           };
           return {
-            slug: c.slug,
-            bn: c.bn,
-            en: c.en,
-            emoji: c.emoji,
+            slug: String(c.slug ?? ""),
+            bn: String(c.bn ?? ""),
+            en: String(c.en ?? ""),
+            emoji: String(c.emoji ?? "💊"),
             kind: (r.kind === "service" ? "service" : "product") as "product" | "service",
             homeDelivery: r.home_delivery ?? true,
             homeService: r.home_service ?? false,
-            serviceRoute: r.service_route ?? "",
-            desc: r.description ?? "",
-            descEn: r.description_en ?? "",
-            eta: r.eta ?? "",
-            etaEn: r.eta_en ?? "",
+            serviceRoute: String(r.service_route ?? ""),
+            desc: String(r.description ?? ""),
+            descEn: String(r.description_en ?? ""),
+            eta: String(r.eta ?? ""),
+            etaEn: String(r.eta_en ?? ""),
             baseFee: Number(r.base_fee ?? 0),
           };
         }),
         offers: raw.offers.map((o) => ({
-          id: o.id,
-          code: o.code,
-          title: o.title,
-          subtitle: o.subtitle,
-          emoji: o.emoji,
+          id: String(o.id ?? ""),
+          code: String(o.code ?? ""),
+          title: String(o.title ?? ""),
+          subtitle: String(o.subtitle ?? ""),
+          emoji: String(o.emoji ?? "🎁"),
           discountPct: Number(o.discount_pct),
           minOrder: Number(o.min_order),
           maxDiscount: Number(o.max_discount),
         })),
         labTests: (raw.labTests ?? []).map((t) => ({
-          id: t.id,
-          bn: t.bn,
-          en: t.en,
+          id: String(t.id ?? ""),
+          bn: String(t.bn ?? ""),
+          en: String(t.en ?? ""),
           price: Number(t.price),
           mrp: Number(t.mrp),
-          group: t.grp,
-          prep: t.prep,
+          group: String(t.grp ?? ""),
+          prep: String(t.prep ?? ""),
         })),
         doctors: (raw.doctors ?? []).map((d) => ({
-          id: d.id,
-          name: d.name,
-          spec: d.spec,
-          degree: d.degree,
-          exp: d.exp,
+          id: String(d.id ?? ""),
+          name: String(d.name ?? ""),
+          spec: String(d.spec ?? ""),
+          degree: String(d.degree ?? ""),
+          exp: String(d.exp ?? ""),
           fee: Number(d.fee),
-          emoji: d.emoji,
-          photo: d.photo_url ?? "",
-          phone: (d as { phone?: string }).phone ?? "",
-          whatsapp: (d as { whatsapp?: string }).whatsapp ?? "",
-          videoUrl: (d as { video_url?: string }).video_url ?? "",
+          emoji: String(d.emoji ?? "🩺"),
+          photo: String(d.photo_url ?? ""),
+          phone: String((d as { phone?: string }).phone ?? ""),
+          whatsapp: String((d as { whatsapp?: string }).whatsapp ?? ""),
+          videoUrl: String((d as { video_url?: string }).video_url ?? ""),
           online: (d as { online?: boolean }).online ?? true,
-          workStart: (d as { work_start?: string }).work_start || "10:00",
-          workEnd: (d as { work_end?: string }).work_end || "22:00",
+          workStart: String((d as { work_start?: string }).work_start || "10:00"),
+          workEnd: String((d as { work_end?: string }).work_end || "22:00"),
           slotMinutes: Number((d as { slot_minutes?: number }).slot_minutes ?? 30) || 30,
-          workDays: (d as { work_days?: number[] }).work_days ?? [0, 1, 2, 3, 4, 5, 6],
+          workDays: normalizeWorkDays((d as { work_days?: unknown }).work_days),
         })),
         settings: {
           deliveryFee: num("delivery_fee", 60),
@@ -293,7 +352,18 @@ export function useCatalog(): Catalog {
   });
 
   if (!data || data.products.length === 0) return fallback;
-  return data;
+  const hasServiceCats = data.categories.some((c) => c.kind === "service");
+  return {
+    ...data,
+    categories: hasServiceCats
+      ? data.categories
+      : [
+          ...data.categories,
+          ...fallback.categories.filter((c) => c.kind === "service"),
+        ],
+    labTests: data.labTests.length ? data.labTests : fallback.labTests,
+    doctors: data.doctors.length ? data.doctors : fallback.doctors,
+  };
 }
 
 /** ডেলিভারি চার্জ হিসাব — ব্যাকএন্ড সেটিংস অনুযায়ী */

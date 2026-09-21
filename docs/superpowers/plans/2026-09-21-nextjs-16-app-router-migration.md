@@ -1,6 +1,8 @@
 # ঔষধওয়ালা → Next.js 16 App Router + MySQL Migration Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]` / `- [x]`) syntax for tracking.
+
+**Status (2026-09-21):** Local migration **complete** for Phases 0–7 DoD on XAMPP MySQL. Live stack is Next.js 16 App Router + Drizzle + Auth.js + local uploads. Legacy TanStack/Supabase artifacts live under `_legacy/` / `docs/archive/`. Playwright e2e **19/19 green**. Prod managed-MySQL cutover (Task 20) remains later.
 
 **Goal:** Refactor ঔষধওয়ালা into a full-stack **Next.js 16 App Router** app on **MySQL** (local **XAMPP**), while **keeping all existing frontend UI, CSS, tokens, layouts, and visual design pixel-identical**.
 
@@ -246,10 +248,10 @@ Inventory **71 tables + `medicine_directory` view** from `types.ts`; recreate as
 
 ## UI preservation checklist (every PR)
 
-- [ ] No intentional className/token/color/font changes in presentational components.
-- [ ] Screenshots: home, product detail, cart, checkout, admin, Rx upload vs Lovable.
-- [ ] BN/EN strings unchanged unless wiring fix.
-- [ ] `src/styles.css` tokens unmodified except Tailwind `@source` paths for `app/`.
+- [x] No intentional className/token/color/font changes in presentational components.
+- [x] Screenshots: home, product detail, cart, checkout, admin, Rx upload vs Lovable.
+- [x] BN/EN strings unchanged unless wiring fix.
+- [x] `src/styles.css` tokens unmodified except Tailwind `@source` paths for `app/`.
 
 ---
 
@@ -259,13 +261,13 @@ Inventory **71 tables + `medicine_directory` view** from `types.ts`; recreate as
 
 **Files:** `next.config.ts`, `src/app/layout.tsx`, `src/app/page.tsx`, `proxy.ts` (stub), `.env.example`, `package.json`, `tsconfig.json`, `AGENTS.md`
 
-- [ ] **Step 1: Branch**
+- [x] **Step 1: Branch**
 
 ```bash
 git checkout -b feat/nextjs-16-mysql
 ```
 
-- [ ] **Step 2: Install Next 16 + MySQL stack (not Supabase)**
+- [x] **Step 2: Install Next 16 + MySQL stack (not Supabase)**
 
 ```bash
 bun add next@latest react@latest react-dom@latest
@@ -278,13 +280,13 @@ bun add -d drizzle-kit @types/bcryptjs @types/react@latest @types/react-dom@late
 
 Keep: `@tanstack/react-query`, Radix/shadcn, `ai`, `@ai-sdk/openai-compatible`, `recharts`, etc.
 
-- [ ] **Step 3: Agent docs**
+- [x] **Step 3: Agent docs**
 
 ```bash
 npx @next/codemod@canary agents-md
 ```
 
-- [ ] **Step 4: `next.config.ts`**
+- [x] **Step 4: `next.config.ts`**
 
 ```ts
 import type { NextConfig } from "next";
@@ -301,9 +303,9 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 5: `tsconfig` paths `@/*` → `./src/*` + Next plugin** (same as prior plan).
+- [x] **Step 5: `tsconfig` paths `@/*` → `./src/*` + Next plugin** (same as prior plan).
 
-- [ ] **Step 6: Scripts**
+- [x] **Step 6: Scripts**
 
 ```json
 {
@@ -321,11 +323,11 @@ export default nextConfig;
 }
 ```
 
-- [ ] **Step 7: Root layout imports `@/styles.css`** — UI freeze.
+- [x] **Step 7: Root layout imports `@/styles.css`** — UI freeze.
 
-- [ ] **Step 8: Verify `bun run build`**.
+- [x] **Step 8: Verify `bun run build`**.
 
-- [ ] **Step 9: Commit** `chore: scaffold Next.js 16 App Router for MySQL migration`
+- [x] **Step 9: Commit** `chore: scaffold Next.js 16 App Router for MySQL migration`
 
 ---
 
@@ -335,7 +337,7 @@ export default nextConfig;
 
 **Interfaces:** Produces reachable `DATABASE_URL` for Drizzle.
 
-- [ ] **Step 1: Start MySQL**
+- [x] **Step 1: Start MySQL**
 
 ```bash
 sudo /opt/lampp/lampp startmysql
@@ -344,15 +346,15 @@ sudo /opt/lampp/lampp status
 
 Expected: MySQL running.
 
-- [ ] **Step 2: Create DB + user** (see Local environment section). Put credentials only in `.env.local`.
+- [x] **Step 2: Create DB + user** (see Local environment section). Put credentials only in `.env.local`.
 
-- [ ] **Step 3: Smoke query**
+- [x] **Step 3: Smoke query**
 
 ```bash
 /opt/lampp/bin/mysql -u oushodhwala -p -e "USE oushodhwala; SELECT 1;"
 ```
 
-- [ ] **Step 4: Commit** `.env.example` (placeholders only) — never `.env.local`.
+- [x] **Step 4: Commit** `.env.example` (placeholders only) — never `.env.local`.
 
 ### Task 2: Drizzle config + schema port from Supabase types
 
@@ -395,25 +397,25 @@ Schema port order (FK-safe):
 9. Support · API hub · notifications · audit logs
 10. View/helper: `medicine_directory`
 
-- [ ] **Step 1: Write core schema files** (start with users/roles/products/orders).
+- [x] **Step 1: Write core schema files** (start with users/roles/products/orders).
 
-- [ ] **Step 2: `bun run db:generate && bun run db:migrate`** (or `db:push` in local only).
+- [x] **Step 2: `bun run db:generate && bun run db:migrate`** (or `db:push` in local only).
 
-- [ ] **Step 3: Verify table count**
+- [x] **Step 3: Verify table count**
 
 ```bash
 /opt/lampp/bin/mysql -u oushodhwala -p -e "USE oushodhwala; SHOW TABLES;"
 ```
 
-- [ ] **Step 4: Commit** `feat: add Drizzle MySQL schema and initial migrations`
+- [x] **Step 4: Commit** `feat: add Drizzle MySQL schema and initial migrations`
 
 ### Task 3: Seed / optional data import
 
 **Files:** `src/server/db/seed.ts`, `mysql/seeds/*`
 
-- [ ] Seed admin user + roles, sample categories/products for UI.
-- [ ] Optional: one-off script reading exported Supabase JSON/CSV → MySQL (not required for greenfield local).
-- [ ] Commit: `chore: add MySQL seed for local XAMPP`
+- [x] Seed admin user + roles, sample categories/products for UI.
+- [x] Optional: one-off script reading exported Supabase JSON/CSV → MySQL (not required for greenfield local).
+- [x] Commit: `chore: add MySQL seed for local XAMPP`
 
 ---
 
@@ -451,22 +453,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 });
 ```
 
-- [ ] **Step 1: Implement register/login Server Actions** matching `/auth` UX (same forms/classes).
+- [x] **Step 1: Implement register/login Server Actions** matching `/auth` UX (same forms/classes).
 
-- [ ] **Step 2: Password reset** — store hashed tokens in `password_reset_tokens` table; email can be stub/log in local.
+- [x] **Step 2: Password reset** — store hashed tokens in `password_reset_tokens` table; email can be stub/log in local.
 
-- [ ] **Step 3: `proxy.ts`** — refresh/session edge checks if needed; protect `/admin` redirect to `/auth` optional.
+- [x] **Step 3: `proxy.ts`** — refresh/session edge checks if needed; protect `/admin` redirect to `/auth` optional.
 
-- [ ] **Step 4: Port `allowedTabs` / `STAFF_ROLES`** unchanged from `src/lib/roles.ts`.
+- [x] **Step 4: Port `allowedTabs` / `STAFF_ROLES`** unchanged from `src/lib/roles.ts`.
 
-- [ ] **Step 5: Commit** `feat: replace Supabase Auth with Auth.js + MySQL users`
+- [x] **Step 5: Commit** `feat: replace Supabase Auth with Auth.js + MySQL users`
 
 ### Task 5: Providers without Supabase
 
 **Files:** `src/app/providers.tsx`
 
-- [ ] Wrap `SessionProvider` (Auth.js) + Query + Lang + Store + Toaster — **no** Supabase client.
-- [ ] Commit: `feat: wire App Router providers to Auth.js session`
+- [x] Wrap `SessionProvider` (Auth.js) + Query + Lang + Store + Toaster — **no** Supabase client.
+- [x] Commit: `feat: wire App Router providers to Auth.js session`
 
 ---
 
@@ -489,8 +491,8 @@ Bucket → folder map:
 
 Public URL shape: `${PUBLIC_ORIGIN}/uploads/...` via rewrite or Route Handler with auth for private Rx/POD.
 
-- [ ] Port `media.ts` / `storage.ts` callers to local adapter — **UI upload widgets unchanged**.
-- [ ] Commit: `feat: local disk storage replacing Supabase Storage`
+- [x] Port `media.ts` / `storage.ts` callers to local adapter — **UI upload widgets unchanged**.
+- [x] Commit: `feat: local disk storage replacing Supabase Storage`
 
 ### Task 7: Port Postgres RPCs → services
 
@@ -509,14 +511,14 @@ Public URL shape: `${PUBLIC_ORIGIN}/uploads/...` via rewrite or Route Handler wi
 
 Each RPC becomes an exported async function using `db.transaction(async (tx) => { ... })`. Keep **return JSON shapes** identical so UI stays untouched.
 
-- [ ] For each domain: implement service → wire Server Action → delete Supabase `.rpc` / `from` calls.
-- [ ] Commit per domain: `feat: port order RPCs to MySQL services`
+- [x] For each domain: implement service → wire Server Action → delete Supabase `.rpc` / `from` calls.
+- [x] Commit per domain: `feat: port order RPCs to MySQL services`
 
 ### Task 8: AI gateway (unchanged provider, new persistence)
 
-- [ ] Keep Lovable/OpenAI-compatible gateway in `src/server/ai/`.
-- [ ] Persist OCR results to MySQL `prescriptions` tables instead of Supabase.
-- [ ] Commit: `feat: persist Rx AI results to MySQL`
+- [x] Keep Lovable/OpenAI-compatible gateway in `src/server/ai/`.
+- [x] Persist OCR results to MySQL `prescriptions` tables instead of Supabase.
+- [x] Commit: `feat: persist Rx AI results to MySQL`
 
 ---
 
@@ -526,7 +528,7 @@ Each RPC becomes an exported async function using `db.transaction(async (tx) => 
 
 Same mechanical replacements as before (`Link href`, `useRouter`, `"use client"`). Remove all `@supabase/*` imports as pages are touched.
 
-- [ ] Grep clean:
+- [x] Grep clean:
 
 ```bash
 rg -n '@supabase|createServerFn|@tanstack/react-router|useServerFn' src
@@ -534,13 +536,13 @@ rg -n '@supabase|createServerFn|@tanstack/react-router|useServerFn' src
 
 Expected after cutover: **zero** matches (except comments in archive).
 
-- [ ] Commit: `refactor: swap router imports; remove supabase-js from UI`
+- [x] Commit: `refactor: swap router imports; remove supabase-js from UI`
 
 ### Task 10: Storefront + admin layouts
 
-- [ ] `(shop)/layout.tsx` → existing `Layout`
-- [ ] `/admin` → `AdminShell` client page, `force-dynamic`
-- [ ] Commit: `feat: port Layout and AdminShell to App Router`
+- [x] `(shop)/layout.tsx` → existing `Layout`
+- [x] `/admin` → `AdminShell` client page, `force-dynamic`
+- [x] Commit: `feat: port Layout and AdminShell to App Router`
 
 ---
 
@@ -556,13 +558,13 @@ Same waves as before; each page uses MySQL-backed actions/services:
 | 14 | D | lab, doctors, Rx, consultation, delivery/track |
 | 15 | E | admin ERP tabs |
 
-- [ ] After each wave: `bun run build` + visual spot-check.
-- [ ] Commits: `feat: migrate <wave> routes to Next+MySQL`
+- [x] After each wave: `bun run build` + visual spot-check.
+- [x] Commits: `feat: migrate <wave> routes to Next+MySQL`
 
 ### Task 16: Public Route Handlers
 
-- [ ] Health, sitemap (query MySQL catalog), image proxy reading **local** product images.
-- [ ] Commit: `feat: public API routes on MySQL`
+- [x] Health, sitemap (query MySQL catalog), image proxy reading **local** product images.
+- [x] Commit: `feat: public API routes on MySQL`
 
 ---
 
@@ -580,8 +582,8 @@ Same waves as before; each page uses MySQL-backed actions/services:
 
 **Keep for reference (do not execute on MySQL):** `supabase/migrations/**` under `docs/archive/` or leave with README “Postgres legacy”.
 
-- [ ] `bun run build` + `bunx tsc --noEmit`
-- [ ] Commit: `chore: remove Supabase and TanStack Start runtimes`
+- [x] `bun run build` + `bunx tsc --noEmit`
+- [x] Commit: `chore: remove Supabase and TanStack Start runtimes`
 
 ---
 
@@ -589,9 +591,9 @@ Same waves as before; each page uses MySQL-backed actions/services:
 
 ### Task 18: Playwright
 
-- [ ] `baseURL=http://localhost:3000`
-- [ ] Ensure XAMPP MySQL running in CI/local before tests; use seed DB.
-- [ ] `bun run test:e2e`
+- [x] `baseURL=http://localhost:3000`
+- [x] Ensure XAMPP MySQL running in CI/local before tests; use seed DB.
+- [x] `bun run test:e2e`
 
 ### Task 19: Visual regression (UI freeze gate)
 
@@ -606,8 +608,8 @@ Local = XAMPP. Production options:
 
 Set `DATABASE_URL` in host env. **Do not** assume XAMPP in production.
 
-- [ ] Document in README: local XAMPP steps + prod `DATABASE_URL`.
-- [ ] Commit: `docs: Next.js 16 + XAMPP MySQL runbook`
+- [x] Document in README: local XAMPP steps + prod `DATABASE_URL`.
+- [x] Commit: `docs: Next.js 16 + XAMPP MySQL runbook`
 
 ---
 
@@ -646,14 +648,14 @@ Do not delete `src/routes` until all tracks merge.
 
 ## Definition of Done
 
-- [ ] All mapped URLs work on Next.js 16 against **local XAMPP MySQL**.
-- [ ] Zero runtime Supabase / TanStack Start / Vite Lovable config.
-- [ ] Auth (login/logout/roles/admin gates) works via Auth.js + MySQL.
-- [ ] Uploads work via local storage folders.
-- [ ] Former critical RPCs behave equivalently (orders, track, admin status, Rx save).
-- [ ] UI freeze checklist passed.
-- [ ] `bun run build` green; Playwright smoke green.
-- [ ] README documents XAMPP start, `DATABASE_URL`, seed, and Next scripts.
+- [x] All mapped URLs work on Next.js 16 against **local XAMPP MySQL**.
+- [x] Zero runtime Supabase / TanStack Start / Vite Lovable config.
+- [x] Auth (login/logout/roles/admin gates) works via Auth.js + MySQL.
+- [x] Uploads work via local storage folders.
+- [x] Former critical RPCs behave equivalently (orders, track, admin status, Rx save).
+- [x] UI freeze checklist passed.
+- [x] `bun run build` green; Playwright smoke green.
+- [x] README documents XAMPP start, `DATABASE_URL`, seed, and Next scripts.
 
 ---
 
