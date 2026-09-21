@@ -1,80 +1,41 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import * as server from "./user-meds.server";
+/** Migration stub — replace with Server Actions. */
 
-export const syncUserMedicines = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { favIds: string[]; recentIds: string[] }) => d)
-  .handler(async ({ data, context }) => {
-    return server.syncMedicines(context.userId, data.favIds, data.recentIds);
-  });
+export async function syncUserMedicines(..._args: unknown[]) {
+  throw new Error("syncUserMedicines not migrated to MySQL/Server Actions yet");
+}
 
-export const getUserMedicines = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const favorites = await server.getFavorites(context.userId);
-    const recent = await server.getRecent(context.userId);
-    return { favorites, recent };
-  });
+export async function getUserMedicines(..._args: unknown[]) {
+  throw new Error("getUserMedicines not migrated to MySQL/Server Actions yet");
+}
 
-export const toggleUserFavorite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { productId: string }) => d)
-  .handler(async ({ data, context }) => {
-    return server.toggleFavorite(context.userId, data.productId);
-  });
+export async function toggleUserFavorite(..._args: unknown[]) {
+  throw new Error("toggleUserFavorite not migrated to MySQL/Server Actions yet");
+}
 
-export const addUserRecent = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { productId: string }) => d)
-  .handler(async ({ data, context }) => {
-    await server.addRecent(context.userId, data.productId);
-    return { success: true };
-  });
+export async function addUserRecent(..._args: unknown[]) {
+  throw new Error("addUserRecent not migrated to MySQL/Server Actions yet");
+}
 
-export const bulkRemoveUserFavorites = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { ids: string[] }) => d)
-  .handler(async ({ data, context }) => {
-    await server.bulkRemoveFavorites(context.userId, data.ids);
-    return { success: true };
-  });
+export async function bulkRemoveUserFavorites(..._args: unknown[]) {
+  throw new Error("bulkRemoveUserFavorites not migrated to MySQL/Server Actions yet");
+}
 
-export const bulkRemoveUserRecent = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { ids: string[] }) => d)
-  .handler(async ({ data, context }) => {
-    await server.bulkRemoveRecent(context.userId, data.ids);
-    return { success: true };
-  });
+export async function bulkRemoveUserRecent(..._args: unknown[]) {
+  throw new Error("bulkRemoveUserRecent not migrated to MySQL/Server Actions yet");
+}
 
-export const updateMedicineReminder = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { productId: string; config: any }) => d)
-  .handler(async ({ data, context }) => {
-    await server.updateReminder(context.userId, data.productId, data.config);
-    return { success: true };
-  });
+export async function updateMedicineReminder(..._args: unknown[]) {
+  throw new Error("updateMedicineReminder not migrated to MySQL/Server Actions yet");
+}
 
-export const updateUserMedicineOrder = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { productIds: string[] }) => d)
-  .handler(async ({ data, context }) => {
-    await server.updateSortOrder(context.userId, data.productIds);
-    return { success: true };
-  });
+export async function updateUserMedicineOrder(..._args: unknown[]) {
+  throw new Error("updateUserMedicineOrder not migrated to MySQL/Server Actions yet");
+}
 
-export const getUserAuditLogs = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    return server.getAuditLogs(context.userId);
-  });
+export async function getUserAuditLogs(..._args: unknown[]) {
+  throw new Error("getUserAuditLogs not migrated to MySQL/Server Actions yet");
+}
 
-export const bulkUpdateMedicineStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { productIds: string[]; active: boolean }) => d)
-  .handler(async ({ data, context }) => {
-    await server.bulkUpdateStatus(context.userId, data.productIds, data.active);
-    return { success: true };
-  });
+export async function bulkUpdateMedicineStatus(..._args: unknown[]) {
+  throw new Error("bulkUpdateMedicineStatus not migrated to MySQL/Server Actions yet");
+}

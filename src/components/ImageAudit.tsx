@@ -1,6 +1,8 @@
+"use client";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { toast } from "sonner";
 import { bn } from "@/data/catalog";
 import { ProductImage } from "@/components/ProductImage";

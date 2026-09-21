@@ -1,6 +1,8 @@
+"use client";
+
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { toast } from "sonner";
 import { Megaphone, Send, Users } from "lucide-react";
 import { countAudience, sendCampaign, type Segment } from "@/lib/campaigns.functions";

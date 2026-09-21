@@ -1,4 +1,7 @@
-import { Link } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+
 import { Heart, Plus, Minus } from "lucide-react";
 import { type Product } from "@/data/catalog";
 import { useStore, toLine } from "@/lib/store";
@@ -19,7 +22,7 @@ export function ProductCard({ p }: { p: Product & { stock?: number; lowStock?: n
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] transition hover:border-primary/50 hover:shadow-[var(--shadow-elevated)]">
-      <Link to="/product/$id" params={{ id: p.id }} className="relative block shrink-0 overflow-hidden">
+      <Link href="/product/$id" params={{ id: p.id }} className="relative block shrink-0 overflow-hidden">
         <ProductImage src={p.image} alt={displayName} emoji={p.emoji} ratio="card" />
 
 
@@ -42,7 +45,7 @@ export function ProductCard({ p }: { p: Product & { stock?: number; lowStock?: n
       <div className="flex flex-1 flex-col p-3">
         <div className="flex items-start gap-1">
           <Link
-            to="/product/$id"
+            href="/product/$id"
             params={{ id: p.id }}
             className="line-clamp-2 min-w-0 text-xs font-bold leading-snug text-navy"
           >

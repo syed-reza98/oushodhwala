@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Headset, Bot, Send, Loader2, User as UserIcon, RefreshCw } from "lucide-react";

@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 
 /** সাধারণ ক্যানভাস স্বাক্ষর প্যাড — টাচ ও মাউস উভয়ে কাজ করে */

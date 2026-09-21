@@ -1,6 +1,9 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
 import { useDismissable } from "@/hooks/useDismissable";
-import { useNavigate } from "@tanstack/react-router";
+import { useRouter } from "next/navigation";
+
 import { useQuery } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Check, Trash2, Plus, Navigation, Truck } from "lucide-react";
 
@@ -28,7 +31,7 @@ type LiveDelivery = {
 /** হেডারের "ডেলিভারি" বার — হাইড/আনহাইড প্যানেলসহ, লগইন ছাড়াই ঠিকানা বদলানো যায় */
 export function DeliverToBar({ full = false }: { full?: boolean }) {
   const t = useT();
-  const navigate = useNavigate();
+  const router = useRouter();
   const { addresses, activeAddress, setActiveAddress, addAddress, removeAddress } = useStore();
   const { user } = useAuth();
 
@@ -214,7 +217,7 @@ export function DeliverToBar({ full = false }: { full?: boolean }) {
                     </span>
                     <button
                       type="button"
-                      onClick={() => void navigate({ to: "/track/$no", params: { no: d.order_no } })}
+                      onClick={() => void router.push({ to: "/track/$no", params: { no: d.order_no } })}
                       className="ml-auto flex items-center gap-1 font-semibold text-primary"
                     >
                       <Navigation className="h-3 w-3" /> {t("ট্র্যাক", "Track")}
@@ -242,7 +245,7 @@ export function DeliverToBar({ full = false }: { full?: boolean }) {
                 <button
                   type="button"
                   disabled={!orderNo.trim()}
-                  onClick={() => void navigate({ to: "/track/$no", params: { no: orderNo.trim() } })}
+                  onClick={() => void router.push({ to: "/track/$no", params: { no: orderNo.trim() } })}
                   className="rounded-lg bg-primary px-3 py-2 text-[11px] font-bold text-primary-foreground disabled:opacity-50"
                 >
                   {t("লাইভ ট্র্যাক", "Live track")}
@@ -253,7 +256,7 @@ export function DeliverToBar({ full = false }: { full?: boolean }) {
                   {t("চলমান অর্ডারের রাইডার ম্যাপে দেখতে ", "To see your rider on the map, ")}
                   <button
                     type="button"
-                    onClick={() => void navigate({ to: "/auth" })}
+                    onClick={() => void router.push({ to: "/auth" })}
                     className="font-semibold text-primary underline"
                   >
                     {t("লগইন করুন", "log in")}

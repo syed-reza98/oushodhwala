@@ -1,6 +1,9 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
+
 import { toast } from "sonner";
 import { Download, FileText, Mic, Star } from "lucide-react";
 
@@ -125,8 +128,8 @@ export function Consultations() {
             </p>
 
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <Link to="/consultation/$id" params={{ id: a.id }} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">রুম</Link>
-              <Link to="/rx/$id" params={{ id: a.id }} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">প্রেসক্রিপশন</Link>
+              <Link href="/consultation/$id" params={{ id: a.id }} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">রুম</Link>
+              <Link href="/rx/$id" params={{ id: a.id }} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">প্রেসক্রিপশন</Link>
               <button onClick={() => setOpen(open === a.id ? "" : a.id)} className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold">
                 রেকর্ডিং / ফিডব্যাক
               </button>

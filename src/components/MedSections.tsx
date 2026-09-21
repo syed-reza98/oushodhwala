@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { ChevronDown, AlertTriangle, Baby, ShieldAlert, Pill } from "lucide-react";
 

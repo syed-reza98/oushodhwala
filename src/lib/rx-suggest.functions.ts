@@ -1,9 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { suggestMedicineRows } from "@/lib/rx-suggest.server";
+/** Migration stub — replace with Server Actions. */
 
-export const suggestMedicines = createServerFn({ method: "GET" })
-  .inputValidator((d: { q: string; limit?: number }) => d)
-  .handler(async ({ data }) => {
-    const rows = await suggestMedicineRows(data.q ?? "", Math.min(data.limit ?? 8, 20));
-    return { rows };
-  });
+export async function suggestMedicines(..._args: unknown[]) {
+  throw new Error("suggestMedicines not migrated to MySQL/Server Actions yet");
+}

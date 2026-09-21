@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { History, ChevronDown, GitCompare } from "lucide-react";
 

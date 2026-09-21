@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bell, ShoppingCart, PackageX, RotateCcw, Star, FileText } from "lucide-react";

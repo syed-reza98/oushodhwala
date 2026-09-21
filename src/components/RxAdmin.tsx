@@ -1,7 +1,10 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
+import { useServerFn } from "@/lib/use-server-fn";
+import Link from "next/link";
+
 import { RefreshCw, Trash2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -185,7 +188,7 @@ export function RxAdmin() {
                   </button>
                 ))}
                 <Link
-                  to="/prescription/$id"
+                  href="/prescription/$id"
                   params={{ id: r.id }}
                   className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold"
                 >

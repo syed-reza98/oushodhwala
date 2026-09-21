@@ -1,3 +1,5 @@
+"use client";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Search, Loader2, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";

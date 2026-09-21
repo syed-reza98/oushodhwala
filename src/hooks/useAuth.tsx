@@ -1,32 +1,18 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+"use client";
+
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { useSession, signOut as nextSignOut } from "next-auth/react";
+import type { AppRole } from "@/server/auth/roles";
+import { STAFF_ROLES } from "@/server/auth/roles";
+
+export type { AppRole };
+export { STAFF_ROLES };
 
 type Profile = { id: string; name: string; phone: string };
 
-export type AppRole =
-  | "super_admin"
-  | "admin"
-  | "erp_manager"
-  | "support_agent"
-  | "accountant"
-  | "pharmacist"
-  | "rider"
-  | "user";
-
-/** ব্যাক-অফিস ভূমিকাগুলো — এদের যেকোনোটি থাকলে ড্যাশবোর্ডে ঢোকা যাবে */
-export const STAFF_ROLES: AppRole[] = [
-  "super_admin",
-  "admin",
-  "erp_manager",
-  "support_agent",
-  "accountant",
-  "pharmacist",
-];
-
 type AuthCtx = {
-  session: Session | null;
-  user: User | null;
+  session: { user: { id: string; email?: string | null } } | null;
+  user: { id: string; email?: string | null } | null;
   profile: Profile | null;
   roles: AppRole[];
   isAdmin: boolean;
@@ -34,7 +20,6 @@ type AuthCtx = {
   isStaff: boolean;
   hasRole: (r: AppRole) => boolean;
   loading: boolean;
-  /** সেশনের মেয়াদ শেষ হয়ে স্বয়ংক্রিয় লগআউট হয়েছে কিনা */
   expired: boolean;
   clearExpired: () => void;
   refresh: () => Promise<void>;
@@ -44,120 +29,45 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expired, setExpired] = useState(false);
+  const { data, status } = useSession();
+  const roles = ((data?.user as { roles?: AppRole[] } | undefined)?.roles ??
+    []) as AppRole[];
+  const user = data?.user
+    ? { id: data.user.id, email: data.user.email }
+    : null;
 
-  const loadMeta = async (uid: string | undefined) => {
-    if (!uid) {
-      setProfile(null);
-      setRoles([]);
-      return;
-    }
-    const [{ data: p }, { data: myRoles }] = await Promise.all([
-      supabase.from("profiles").select("id, name, phone").eq("id", uid).maybeSingle(),
-      supabase.rpc("my_roles"),
-    ]);
-    setProfile(p ?? null);
-    setRoles(((myRoles as string[] | null) ?? []) as AppRole[]);
-  };
-
-
-  useEffect(() => {
-    let alive = true;
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      if (!alive) return;
-      setSession(s);
-      if (event === "SIGNED_OUT") {
-        setProfile(null);
-        setRoles([]);
-      } else if (event === "TOKEN_REFRESHED") {
-        /* সেশন রিফ্রেশ — মেটা পুনরায় লোডের দরকার নেই */
-      } else {
-        void loadMeta(s?.user.id);
-      }
-    });
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (!alive) return;
-      setSession(data.session);
-      await loadMeta(data.session?.user.id);
-      setLoading(false);
-    });
-    return () => {
-      alive = false;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
-
-  /** সেশনের মেয়াদ শেষ হলে স্বয়ংক্রিয় লগআউট — বাসি টোকেন নিয়ে ব্যর্থ রিকোয়েস্ট ঠেকায় */
-  useEffect(() => {
-    if (!session?.expires_at) return;
-    const ms = session.expires_at * 1000 - Date.now();
-    if (ms <= 0) {
-      setExpired(true);
-      void supabase.auth.signOut();
-      return;
-    }
-    const id = window.setTimeout(() => {
-      void supabase.auth.getSession().then(({ data }) => {
-        // রিফ্রেশ ব্যর্থ হলে সেশন থাকবে না — তখনই লগআউট বার্তা
-        if (!data.session) {
-          setExpired(true);
-          void supabase.auth.signOut();
-        }
-      });
-    }, ms + 1000);
-    return () => window.clearTimeout(id);
-  }, [session?.expires_at]);
-
-  // ট্যাব আবার সক্রিয় হলে সেশন যাচাই
-  useEffect(() => {
-    const onFocus = () => {
-      void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);
-
-
-  const hasRole = (r: AppRole) => roles.includes(r);
-  const isSuperAdmin = hasRole("super_admin");
-  const isAdmin = isSuperAdmin || hasRole("admin");
-  const isStaff = isAdmin || STAFF_ROLES.some((r) => roles.includes(r));
-
-  const value: AuthCtx = {
-    session,
-    user: session?.user ?? null,
-    profile,
-    roles,
-    isAdmin,
-    isSuperAdmin,
-    isStaff,
-    hasRole,
-    loading,
-    expired,
-    clearExpired: () => setExpired(false),
-    refresh: async () => {
-      const { data } = await supabase.auth.getSession();
-      setSession(data.session);
-      await loadMeta(data.session?.user.id);
-    },
-    signOut: async () => {
-      setExpired(false);
-      await supabase.auth.signOut();
-      setProfile(null);
-      setRoles([]);
-    },
-  };
-
+  const value = useMemo<AuthCtx>(
+    () => ({
+      session: user ? { user } : null,
+      user,
+      profile: user
+        ? {
+            id: user.id,
+            name: data?.user?.name ?? "",
+            phone: "",
+          }
+        : null,
+      roles,
+      isAdmin: roles.includes("admin") || roles.includes("super_admin"),
+      isSuperAdmin: roles.includes("super_admin"),
+      isStaff: roles.some((r) => STAFF_ROLES.includes(r)),
+      hasRole: (r) => roles.includes(r),
+      loading: status === "loading",
+      expired: false,
+      clearExpired: () => {},
+      refresh: async () => {},
+      signOut: async () => {
+        await nextSignOut({ redirect: false });
+      },
+    }),
+    [user, roles, status, data?.user?.name],
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {
-  const c = useContext(Ctx);
-  if (!c) throw new Error("useAuth must be used within AuthProvider");
-  return c;
+  const ctx = useContext(Ctx);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

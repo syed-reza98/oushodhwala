@@ -1,5 +1,9 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
 import { useQuery } from "@tanstack/react-query";
 import { Search, X, Clock, TrendingUp, Loader2, CornerDownLeft, HomeIcon, RefreshCw } from "lucide-react";
 import { searchProducts } from "@/lib/catalog.functions";
@@ -40,7 +44,7 @@ function readRecent(): string[] {
 }
 
 export function SearchBox({ className = "" }: { className?: string }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { lang } = useLang();
   const en = lang === "en";
   const [q, setQ] = useState("");
@@ -130,22 +134,22 @@ export function SearchBox({ className = "" }: { className?: string }) {
     saveTerm(t);
     setOpen(false);
     setActive(-1);
-    navigate({ to: "/products", search: { q: t, category: "all", sort: "popular" } });
+    router.push({ to: "/products", search: { q: t, category: "all", sort: "popular" } });
   };
 
   const goProduct = (id: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    navigate({ to: "/product/$id", params: { id } });
+    router.push({ to: "/product/$id", params: { id } });
   };
 
   const goService = (slug: string, route: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    if (route === "/home-diagnostics") void navigate({ to: "/home-diagnostics" });
-    else void navigate({ to: "/home-services", search: { s: slug } });
+    if (route === "/home-diagnostics") void router.push({ to: "/home-diagnostics" });
+    else void router.push({ to: "/home-services", search: { s: slug } });
   };
 
   const total = rows.length + services.length;
@@ -454,7 +458,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
                 ))}
               </div>
               <Link
-                to="/categories"
+                href="/categories"
                 onClick={() => setOpen(false)}
                 className="mt-2 block rounded-xl bg-secondary py-2 text-center text-[11px] font-bold text-primary"
               >

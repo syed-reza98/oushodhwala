@@ -1,6 +1,8 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { toast } from "sonner";
 import { Plug, Plus, Trash2, Save, Wifi, Eye, EyeOff } from "lucide-react";
 import {

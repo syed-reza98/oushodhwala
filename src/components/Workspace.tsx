@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { Search, LayoutGrid } from "lucide-react";
 import type { AdminNavGroup } from "@/components/AdminShell";

@@ -1,5 +1,9 @@
+"use client";
+
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
 import { ChevronDown, FileText, Heart, LogIn, LogOut, ShieldCheck, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
@@ -9,7 +13,7 @@ import { useDismissable, menuKeyNav } from "@/hooks/useDismissable";
 export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mobile" }) {
   const { user, profile, isStaff, signOut, loading } = useAuth();
   const t = useT();
-  const navigate = useNavigate();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
   const { ref, triggerRef } = useDismissable<HTMLDivElement>(open, close);
@@ -37,7 +41,7 @@ export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mo
   if (!user) {
     return mobile ? (
       <Link
-        to="/auth"
+        href="/auth"
         aria-label={t("লগইন", "Log in")}
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-bold text-primary-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
       >
@@ -46,7 +50,7 @@ export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mo
       </Link>
     ) : (
       <Link
-        to="/auth"
+        href="/auth"
         className="hidden items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:inline-flex"
       >
         <LogIn className="h-4 w-4" /> {t("লগইন", "Log in")}
@@ -94,17 +98,17 @@ export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mo
           className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-card p-1.5 shadow-[var(--shadow-elevated)]"
         >
           <p className="truncate px-2.5 py-2 text-[11px] text-muted-foreground">{user.email}</p>
-          <Link to="/account" role="menuitem" onClick={close} className={itemCls}>
+          <Link href="/account" role="menuitem" onClick={close} className={itemCls}>
             <User className="h-4 w-4 text-primary" /> {t("আমার একাউন্ট", "My account")}
           </Link>
-          <Link to="/orders" role="menuitem" onClick={close} className={itemCls}>
+          <Link href="/orders" role="menuitem" onClick={close} className={itemCls}>
             <FileText className="h-4 w-4 text-primary" /> {t("আমার অর্ডার", "My orders")}
           </Link>
-          <Link to="/wishlist" role="menuitem" onClick={close} className={itemCls}>
+          <Link href="/wishlist" role="menuitem" onClick={close} className={itemCls}>
             <Heart className="h-4 w-4 text-primary" /> {t("উইশলিস্ট", "Wishlist")}
           </Link>
           {isStaff && (
-            <Link to="/admin" role="menuitem" onClick={close} className={itemCls}>
+            <Link href="/admin" role="menuitem" onClick={close} className={itemCls}>
               <ShieldCheck className="h-4 w-4 text-primary" /> {t("ড্যাশবোর্ড", "Dashboard")}
             </Link>
           )}
@@ -113,7 +117,7 @@ export function AccountMenu({ variant = "desktop" }: { variant?: "desktop" | "mo
             onClick={async () => {
               setOpen(false);
               await signOut();
-              void navigate({ to: "/", replace: true });
+              void router.push({ to: "/", replace: true });
             }}
             className={`${itemCls} mt-1 border-t border-border text-sale`}
           >

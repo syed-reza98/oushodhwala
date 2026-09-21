@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { ShieldCheck, Check, Minus } from "lucide-react";
 import { ROLE_LABEL, ROLE_TABS } from "@/lib/roles";

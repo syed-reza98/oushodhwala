@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { LocateFixed, MapPin, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useT } from "@/lib/i18n";

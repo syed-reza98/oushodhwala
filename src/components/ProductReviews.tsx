@@ -1,6 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
+
 import { Star, BadgeCheck, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -112,7 +115,7 @@ export function ProductReviews({ productId }: { productId: string }) {
         {!user ? (
           <p className="text-xs text-muted-foreground">
             {t("রিভিউ দিতে ", "To write a review, ")}
-            <Link to="/auth" className="font-semibold text-primary">
+            <Link href="/auth" className="font-semibold text-primary">
               {t("লগইন করুন", "log in")}
             </Link>
             {t("।", ".")}

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { Share2, Check } from "lucide-react";
 import { useT } from "@/lib/i18n";

@@ -1,5 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { useServerFn } from "@/lib/use-server-fn";
 import { useQuery } from "@tanstack/react-query";
 import { Link2, Copy, Ban, Clock } from "lucide-react";
 import { toast } from "sonner";

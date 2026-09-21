@@ -1,6 +1,10 @@
+"use client";
+
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useRouterState } from "@tanstack/react-router";
+import Link from "next/link";
+
 import {
   ChevronDown,
   LayoutGrid,
@@ -59,7 +63,7 @@ export function DesktopMenu() {
   const en = lang === "en";
   const items = useItems();
   const [openCat, setOpenCat] = useState(false);
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = usePathname();
 
   useEffect(() => setOpenCat(false), [pathname]);
 
@@ -109,7 +113,7 @@ export function DesktopMenu() {
                 ))}
               </div>
               <Link
-                to="/categories"
+                href="/categories"
                 className="mt-2 block rounded-xl bg-secondary py-2 text-center text-[11px] font-bold text-primary"
               >
                 {en ? "View all categories" : "সব ক্যাটাগরি দেখুন"}
@@ -135,7 +139,7 @@ export function DesktopMenu() {
         })}
 
         {isAdmin && (
-          <Link to="/admin" className="ml-1 rounded-full bg-navy px-3 py-1 text-xs text-navy-foreground">
+          <Link href="/admin" className="ml-1 rounded-full bg-navy px-3 py-1 text-xs text-navy-foreground">
             {en ? "Admin" : "অ্যাডমিন"}
           </Link>
         )}
@@ -159,7 +163,7 @@ export function MobileMenu() {
   const { isAdmin } = useAuth();
   const en = lang === "en";
   const items = useItems();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = usePathname();
 
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -240,7 +244,7 @@ export function MobileMenu() {
                 )}
                 {isAdmin && (
                   <Link
-                    to="/admin"
+                    href="/admin"
                     className="flex items-center gap-3 rounded-xl bg-navy px-3 py-2.5 text-sm font-semibold text-navy-foreground"
                   >
                     <LayoutGrid className="h-4 w-4" /> {en ? "Admin" : "অ্যাডমিন"}
