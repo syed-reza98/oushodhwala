@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/server/auth/config";
-import { saveUpload, type StorageBucket } from "@/server/storage/local";
+import { saveUpload, type StorageBucket } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 

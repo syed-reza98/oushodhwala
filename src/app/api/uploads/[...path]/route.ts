@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { absoluteUploadPath } from "@/server/storage/local";
+import { readUpload } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -14,34 +12,14 @@ export async function GET(
   if (!rel || rel.includes("..")) {
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
-  try {
-    const abs = absoluteUploadPath(rel);
-    const root = path.resolve(
-      /*turbopackIgnore: true*/ process.cwd(),
-      process.env.UPLOAD_DIR ?? "storage/uploads",
-    );
-    if (!abs.startsWith(root)) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
-    }
-    const buf = await readFile(abs);
-    const ext = path.extname(abs).toLowerCase();
-    const type =
-      ext === ".png"
-        ? "image/png"
-        : ext === ".jpg" || ext === ".jpeg"
-          ? "image/jpeg"
-          : ext === ".webp"
-            ? "image/webp"
-            : ext === ".pdf"
-              ? "application/pdf"
-              : "application/octet-stream";
-    return new NextResponse(buf, {
-      headers: {
-        "Content-Type": type,
-        "Cache-Control": "public, max-age=86400",
-      },
-    });
-  } catch {
+  const file = await readUpload(rel);
+  if (!file) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  return new NextResponse(new Uint8Array(file.buffer), {
+    headers: {
+      "Content-Type": file.contentType,
+      "Cache-Control": "public, max-age=86400",
+    },
+  });
 }

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.17",
+    "@aws-sdk/client-s3": "^3.1137.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",

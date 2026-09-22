@@ -14,7 +14,7 @@ import {
   userRoles,
   users,
 } from "./schema";
-import { ensureBuckets } from "@/server/storage/local";
+import { ensureBuckets } from "@/server/storage";
 import {
   categories as staticCategories,
   doctors as staticDoctors,

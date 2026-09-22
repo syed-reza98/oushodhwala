@@ -3,7 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/server/db";
 import { products } from "@/server/db/schema";
 import { requireStaff } from "@/server/services/authz";
-import { saveUpload } from "@/server/storage/local";
+import { saveUpload } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 

@@ -4,7 +4,7 @@ import { and, desc, eq, like } from "drizzle-orm";
 import { db } from "@/server/db";
 import { mediaAssets } from "@/server/db/schema";
 import { requireStaff } from "@/server/services/authz";
-import { removeUpload, saveUpload } from "@/server/storage/local";
+import { removeUpload, saveUpload } from "@/server/storage";
 
 export const dynamic = "force-dynamic";
 

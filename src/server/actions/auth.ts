@@ -7,6 +7,7 @@ import { AuthError } from "next-auth";
 import { signIn } from "@/server/auth/config";
 import { db } from "@/server/db";
 import { passwordResetTokens, profiles, userRoles, users } from "@/server/db/schema";
+import { sendEmail } from "@/server/email/send";
 
 function tokenHash(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
@@ -70,7 +71,7 @@ export async function loginUser(input: { email: string; password: string }) {
   }
 }
 
-/** Creates a reset token. Local: returns raw token for logging (no email provider). */
+/** Creates a reset token and emails a link (console fallback when no mailer configured). */
 export async function requestPasswordReset(emailRaw: string) {
   const email = emailRaw.trim().toLowerCase();
   if (!email) return { ok: false as const, error: "Email required" };
@@ -88,11 +89,24 @@ export async function requestPasswordReset(emailRaw: string) {
     expiresAt: expires.toISOString().slice(0, 23).replace("T", " "),
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    console.info(`[password-reset] ${email} token=${raw}`);
-  }
+  const origin = (process.env.PUBLIC_ORIGIN || process.env.AUTH_URL || "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
+  const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(raw)}`;
 
-  return { ok: true as const, token: process.env.NODE_ENV === "production" ? null : raw };
+  await sendEmail({
+    to: email,
+    subject: "Reset your Oushodhwala password",
+    text: `Reset your password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, ignore this email.`,
+    html: `<p>Reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 1 hour. If you did not request this, ignore this email.</p>`,
+  });
+
+  // Dev convenience: return raw token only outside production
+  return {
+    ok: true as const,
+    token: process.env.NODE_ENV === "production" ? null : raw,
+  };
 }
 
 export async function resetPasswordWithToken(input: { token: string; password: string }) {

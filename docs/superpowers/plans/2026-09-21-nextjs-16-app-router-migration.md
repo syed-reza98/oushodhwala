@@ -2,7 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]` / `- [x]`) syntax for tracking.
 
-**Status (2026-09-21):** Local migration **complete** for Phases 0–7 DoD on XAMPP MySQL. Live stack is Next.js 16 App Router + Drizzle + Auth.js + local uploads. Legacy TanStack/Supabase artifacts live under `_legacy/` / `docs/archive/`. Playwright e2e **19/19 green**. Prod managed-MySQL cutover (Task 20) remains later.
+**Status (2026-09-22):** Local migration **complete** for Phases 0–7 DoD on XAMPP MySQL. Live stack is Next.js 16 App Router + Drizzle + Auth.js + local uploads. Storefront **home + product detail** restored from `_legacy` (UI freeze). App Router `not-found` / `error` / shop `loading` added; client error logs → MySQL; password-reset via Resend (console fallback); `STORAGE_DRIVER=local|s3|r2` abstraction. `_legacy/` **kept** as reference. Playwright e2e **19/19** historically green (re-run recommended after product restore).
+
+**Task 19 (visual spot-check vs Lovable, 2026-09-22):** Home structure/copy matches Lovable (hero, categories, care-at-home, popular, offers, lab, reviews). Empty cart copy/CTA matches. Product detail now has full PDP (gallery, cart, med sections, reviews). Checkout/prescription/admin routes return 200 / soft-gate as expected. Data volume on local DB may differ from Lovable catalog (seed vs full catalog).
+
+**Task 20:** Code + README cutover checklist ready (managed MySQL env, S3/R2). Actual cloud DB provisioning / DNS / deploy remains an operator step.
 
 **Goal:** Refactor ঔষধওয়ালা into a full-stack **Next.js 16 App Router** app on **MySQL** (local **XAMPP**), while **keeping all existing frontend UI, CSS, tokens, layouts, and visual design pixel-identical**.
 
@@ -599,6 +603,9 @@ Same waves as before; each page uses MySQL-backed actions/services:
 
 Compare to `https://oushodhwala.lovable.app` for home, product, cart, checkout, admin, Rx.
 
+- [x] Home / cart empty-state / product PDP structure aligned (2026-09-22 browser spot-check)
+- [x] Checkout · prescription · admin soft-gate HTTP OK on local
+
 ### Task 20: Production MySQL (later)
 
 Local = XAMPP. Production options:
@@ -608,8 +615,10 @@ Local = XAMPP. Production options:
 
 Set `DATABASE_URL` in host env. **Do not** assume XAMPP in production.
 
-- [x] Document in README: local XAMPP steps + prod `DATABASE_URL`.
-- [x] Commit: `docs: Next.js 16 + XAMPP MySQL runbook`
+- [x] Document in README: local XAMPP steps + prod `DATABASE_URL` + S3/R2 + Resend
+- [x] Storage abstraction (`STORAGE_DRIVER=local|s3|r2`) behind `src/server/storage`
+- [ ] Operator: provision managed MySQL, set secrets, deploy, run cutover checklist
+- [x] Commit: `docs: Next.js 16 + XAMPP MySQL runbook` (prior) + follow-up storage/email docs
 
 ---
 

@@ -1,45 +1,20 @@
-import Link from "next/link";
-import { getCatalog } from "@/server/actions/catalog";
+import type { Metadata } from "next";
+import HomeClient from "./HomeClient";
 
-export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: {
+    absolute: "ঔষধওয়ালা — অনলাইন ফার্মেসি | Oushodhwala",
+  },
+  description:
+    "ঔষধওয়ালা থেকে অরিজিনাল ঔষধ, স্বাস্থ্য পণ্য, ল্যাব টেস্ট ও ডাক্তার পরামর্শ নিন। ঢাকায় ২ ঘণ্টায় ডেলিভারি, সারাদেশে ২৪-৭২ ঘণ্টায়।",
+  openGraph: {
+    title: "ঔষধওয়ালা — অনলাইন ফার্মেসি | Oushodhwala",
+    description: "অরিজিনাল ঔষধ, স্বাস্থ্য পণ্য ও ল্যাব টেস্ট অর্ডার করুন — ঘরে বসে।",
+    url: "/",
+  },
+  alternates: { canonical: "/" },
+};
 
-export default async function HomePage() {
-  const products = await getCatalog(8);
-  return (
-    <div className="pt-4">
-      <h1 className="font-display text-2xl font-extrabold text-navy">ঔষধওয়ালা</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Next.js 16 + XAMPP MySQL — migration checkpoint
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Link
-          href="/products"
-          className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
-        >
-          Browse products
-        </Link>
-        <Link
-          href="/about"
-          className="rounded-lg border border-border px-4 py-2 text-xs font-semibold"
-        >
-          About
-        </Link>
-      </div>
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {products.map((p) => (
-          <li
-            key={p.id}
-            className="rounded-xl border border-border bg-card p-3 shadow-[var(--shadow-card)]"
-          >
-            <Link href={`/product/${p.id}`}>
-              <p className="text-sm font-bold">{p.name}</p>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                ৳{Number(p.price).toFixed(2)}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+export default function HomePage() {
+  return <HomeClient />;
 }

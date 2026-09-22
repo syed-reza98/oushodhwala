@@ -1,11 +1,29 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getProductById } from "@/server/actions/catalog";
-import { ProductReviews } from "@/components/ProductReviews";
-import { RecordMedicineView } from "@/components/RecordMedicineView";
-import { RefillReminder } from "@/components/RefillReminder";
+import { getProductPage } from "@/server/actions/catalog";
+import ProductClient from "./ProductClient";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const payload = await getProductPage(id);
+  if (!payload) {
+    return { title: "পণ্য পাওয়া যায়নি", robots: { index: false } };
+  }
+  const p = payload.row;
+  const title = `${p.name} — দাম ৳${p.price} | ঔষধওয়ালা`;
+  const desc = `${p.name} (${p.en ?? ""}) — ${p.generic ?? ""}, ${p.brand ?? ""}। ৳${p.price} টাকায় অনলাইনে অর্ডার করুন, দ্রুত হোম ডেলিভারি।`;
+  return {
+    title: { absolute: title },
+    description: desc,
+    openGraph: { title, description: desc, type: "website" },
+  };
+}
 
 export default async function ProductDetailPage({
   params,
@@ -13,34 +31,17 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = await getProductById(id);
-  if (!product) notFound();
+  const payload = await getProductPage(id);
+  if (!payload) notFound();
 
   return (
-    <div className="pt-4">
-      <Link href="/products" className="text-xs font-semibold text-primary">
-        ← Products
-      </Link>
-      <h1 className="mt-3 font-display text-xl font-extrabold text-navy">
-        {product.name}
-      </h1>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {[product.generic, product.strength, product.form]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
-      <p className="mt-4 text-lg font-bold text-primary">
-        ৳{Number(product.price).toFixed(2)}
-      </p>
-      {product.description && (
-        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-          {product.description}
-        </p>
-      )}
-      <p className="mt-4 text-xs text-muted-foreground">Stock: {product.stock}</p>
-      <RecordMedicineView productId={product.id} />
-      <RefillReminder productId={product.id} productName={product.name} />
-      <ProductReviews productId={product.id} />
-    </div>
+    <ProductClient
+      initial={{
+        row: payload.row as unknown as Record<string, unknown>,
+        related: payload.related as unknown as Record<string, unknown>[],
+        variants: payload.variants as unknown as Record<string, unknown>[],
+        generic: payload.generic,
+      }}
+    />
   );
 }

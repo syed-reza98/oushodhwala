@@ -98,9 +98,66 @@ E2E_BASE_URL=http://127.0.0.1:3000 npm run test:e2e
 | `npm run db:seed` | Seed admin + sample catalog |
 | `npm run test:e2e` | Playwright smoke (`E2E_BASE_URL`) |
 
-## Production note
+## Production
 
-Local default is XAMPP. For production use managed MySQL (RDS, PlanetScale, Railway, etc.) and set `DATABASE_URL` on the host (e.g. Vercel). Local disk uploads are fine for XAMPP; use object storage later behind the same `/api/upload` interface.
+Local default is XAMPP MySQL + disk uploads. For production:
+
+### Managed MySQL
+
+1. Provision MySQL 8+ (RDS, PlanetScale, Railway, Neon MySQL-compatible, etc.).
+2. Set host env (never commit secrets):
+
+```bash
+DATABASE_URL="mysql://USER:PASS@HOST:3306/oushodhwala"
+AUTH_SECRET="$(openssl rand -base64 32)"
+AUTH_URL="https://your.domain"
+PUBLIC_ORIGIN="https://your.domain"
+```
+
+3. Run schema + seed against that DB from a one-off job or CI:
+
+```bash
+npm run db:push   # or db:generate && db:migrate
+npm run db:seed   # optional bootstrap admin
+```
+
+4. Deploy the Next app (`npm run build` + `npm start`, or Vercel). Ensure the host can reach MySQL (allowlist / VPC / SSL as required).
+
+### Object storage (uploads)
+
+Ephemeral hosts (e.g. Vercel) should not use local disk. Set:
+
+```bash
+STORAGE_DRIVER=s3   # or r2
+S3_BUCKET=oushodhwala-uploads
+S3_REGION=auto
+S3_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com   # R2 / path-style providers
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_FORCE_PATH_STYLE=true
+S3_PUBLIC_BASE_URL=https://cdn.your.domain   # optional CDN base; else /uploads proxy
+UPLOAD_PUBLIC_BASE=/uploads
+```
+
+`saveUpload` / `removeUpload` / `/api/uploads` go through `src/server/storage` (`local` or `s3`). Keep the same bucket folder names: `media`, `prescriptions`, `consultations`, `pod`, `reports`, `product-images`.
+
+### Email (password reset)
+
+```bash
+EMAIL_FROM="Oushodhwala <noreply@your.domain>"
+RESEND_API_KEY=re_...
+```
+
+Without `RESEND_API_KEY`, reset links are logged to the server console (dev-friendly).
+
+### Cutover checklist
+
+- [ ] Managed `DATABASE_URL` set; migrate/seed done
+- [ ] `AUTH_SECRET` / `AUTH_URL` / `PUBLIC_ORIGIN` production values
+- [ ] `STORAGE_DRIVER=s3|r2` + credentials (if not a persistent VPS disk)
+- [ ] Resend or SMTP configured for password reset
+- [ ] Smoke: login, place order, upload Rx, admin gate, `/api/public/health`
+
 
 ## UI freeze
 
