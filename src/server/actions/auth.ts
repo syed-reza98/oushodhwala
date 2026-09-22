@@ -35,21 +35,24 @@ export async function registerUser(input: {
 
   const id = randomUUID();
   const passwordHash = await hash(input.password, 10);
-  await db.insert(users).values({
-    id,
-    email,
-    passwordHash,
-    name: input.name ?? null,
-  });
-  await db.insert(profiles).values({
-    id,
-    fullName: input.name ?? null,
-    phone: input.phone ?? null,
-  });
-  await db.insert(userRoles).values({
-    id: randomUUID(),
-    userId: id,
-    role: "user",
+
+  await db.transaction(async (tx) => {
+    await tx.insert(users).values({
+      id,
+      email,
+      passwordHash,
+      name: input.name ?? null,
+    });
+    await tx.insert(profiles).values({
+      id,
+      fullName: input.name ?? null,
+      phone: input.phone ?? null,
+    });
+    await tx.insert(userRoles).values({
+      id: randomUUID(),
+      userId: id,
+      role: "user",
+    });
   });
 
   return { ok: true as const, userId: id };

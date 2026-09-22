@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
 import { orderEvents, orderItems, orderReturns, orders, products } from "@/server/db/schema";
@@ -39,16 +39,6 @@ export async function placeOrder(input: PlaceOrderInput) {
   if (!input.items.length) throw new Error("EMPTY_CART");
 
   const productLines = input.items.filter((i) => i.kind === "product");
-  for (const line of productLines) {
-    const [row] = await db
-      .select({ stock: products.stock, name: products.name })
-      .from(products)
-      .where(and(eq(products.id, line.id), eq(products.active, true)))
-      .limit(1);
-    if (!row || row.stock < line.qty) {
-      throw new Error(`OUT_OF_STOCK:${row?.name ?? line.name}:${row?.stock ?? 0}`);
-    }
-  }
 
   const subtotal = input.items.reduce((s, i) => s + i.price * i.qty, 0);
   const total = Math.max(0, subtotal - input.discount + input.deliveryFee);
@@ -57,6 +47,32 @@ export async function placeOrder(input: PlaceOrderInput) {
   const publicToken = randomBytes(9).toString("hex");
 
   await db.transaction(async (tx) => {
+    // Atomic stock check and decrement to prevent race conditions & overselling
+    for (const line of productLines) {
+      const [res] = await tx
+        .update(products)
+        .set({ stock: sql`${products.stock} - ${line.qty}` })
+        .where(
+          and(
+            eq(products.id, line.id),
+            gte(products.stock, line.qty),
+            eq(products.active, true),
+          ),
+        );
+
+      const affected = (res as { affectedRows?: number })?.affectedRows ?? 0;
+      if (affected === 0) {
+        const [current] = await tx
+          .select({ name: products.name, stock: products.stock })
+          .from(products)
+          .where(eq(products.id, line.id))
+          .limit(1);
+        throw new Error(
+          `OUT_OF_STOCK:${current?.name ?? line.name}:${current?.stock ?? 0}`,
+        );
+      }
+    }
+
     await tx.insert(orders).values({
       id,
       orderNo: no,
@@ -86,12 +102,6 @@ export async function placeOrder(input: PlaceOrderInput) {
         unitPrice: String(line.price),
         lineTotal: String(line.price * line.qty),
       });
-      if (line.kind === "product") {
-        await tx
-          .update(products)
-          .set({ stock: sql`${products.stock} - ${line.qty}` })
-          .where(eq(products.id, line.id));
-      }
     }
 
     await tx.insert(orderEvents).values({

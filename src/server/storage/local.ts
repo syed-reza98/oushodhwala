@@ -20,6 +20,8 @@ function guessType(ext: string) {
       return "image/jpeg";
     case ".webp":
       return "image/webp";
+    case ".svg":
+      return "image/svg+xml";
     case ".pdf":
       return "application/pdf";
     default:
