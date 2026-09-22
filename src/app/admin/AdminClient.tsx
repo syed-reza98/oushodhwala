@@ -2367,29 +2367,7 @@ export default function AdminClient() {
       toast.error(e instanceof Error ? e.message : t("রিভিশন যোগ ব্যর্থ", "Create failed")),
   });
 
-  if (loading) {
-    return <p className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</p>;
-  }
-
-  if (!user || !isStaff) {
-    return (
-      <div className="grid min-h-screen place-items-center p-6 text-center">
-        <div>
-          <p className="text-sm font-bold">{t("অ্যাডমিন অ্যাক্সেস প্রয়োজন", "Admin access required")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {t("স্টাফ অ্যাকাউন্ট দিয়ে লগইন করুন।", "Sign in with a staff account.")}
-          </p>
-          <Link
-            href="/auth"
-            className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
-          >
-            {t("লগইন", "Log in")}
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
+  // ── Derived data (must be before any early returns — React Rules of Hooks) ──
   const orders = dash.data?.orders ?? [];
   const products = dash.data?.products ?? [];
   const deliveryOrders = orders.filter((o) =>
@@ -2467,6 +2445,30 @@ export default function AdminClient() {
     const q = workspaceQ.trim().toLowerCase();
     return q ? base.filter((m) => m.t.toLowerCase().includes(q)) : base;
   }, [navGroups, workspaceQ, workspaceSimple]);
+
+  // ── Early return guards (after all hooks) ─────────────────────────────────
+  if (loading) {
+    return <p className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</p>;
+  }
+
+  if (!user || !isStaff) {
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div>
+          <p className="text-sm font-bold">{t("অ্যাডমিন অ্যাক্সেস প্রয়োজন", "Admin access required")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("স্টাফ অ্যাকাউন্ট দিয়ে লগইন করুন।", "Sign in with a staff account.")}
+          </p>
+          <Link
+            href="/auth"
+            className="mt-4 inline-block rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+          >
+            {t("লগইন", "Log in")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AdminShell
