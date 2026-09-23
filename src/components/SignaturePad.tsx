@@ -1,103 +1,122 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { useT } from "@/lib/i18n";
 
-/** সাধারণ ক্যানভাস স্বাক্ষর প্যাড — টাচ ও মাউস উভয়ে কাজ করে */
 export function SignaturePad({
-  onChange,
-  label,
-  clearLabel,
-  height = 140,
+  onSave,
+  onClear,
 }: {
-  onChange: (blob: Blob | null) => void;
-  label: string;
-  clearLabel: string;
-  height?: number;
+  onSave: (dataUrl: string) => void;
+  onClear?: () => void;
 }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
-  const dirty = useRef(false);
-  const [empty, setEmpty] = useState(true);
+  const t = useT();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasContent, setHasContent] = useState(false);
 
   useEffect(() => {
-    const c = ref.current;
-    if (!c) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth;
-    c.width = w * dpr;
-    c.height = height * dpr;
-    const ctx = c.getContext("2d");
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, height);
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a";
-  }, [height]);
+    ctx.strokeStyle = "#111827";
+  }, []);
 
-  const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  const getPos = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ("touches" in e) {
+      const touch = e.touches[0];
+      if (!touch) return { x: 0, y: 0 };
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
   };
 
-  const emit = () => {
-    const c = ref.current;
-    if (!c) return;
-    c.toBlob((b) => onChange(b), "image/png");
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setIsDrawing(true);
+    setHasContent(true);
   };
 
-  const clear = () => {
-    const c = ref.current;
-    const ctx = c?.getContext("2d");
-    if (!c || !ctx) return;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, c.clientWidth, height);
-    dirty.current = false;
-    setEmpty(true);
-    onChange(null);
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (canvas && hasContent) {
+      onSave(canvas.toDataURL("image/png"));
+    }
+  };
+
+  const handleClear = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasContent(false);
+    onClear?.();
   };
 
   return (
-    <div>
-      <p className="mb-1 text-[11px] font-semibold text-muted-foreground">{label}</p>
-      <canvas
-        ref={ref}
-        style={{ height, touchAction: "none" }}
-        className="w-full rounded-xl border border-border bg-white"
-        onPointerDown={(e) => {
-          e.currentTarget.setPointerCapture(e.pointerId);
-          const ctx = e.currentTarget.getContext("2d");
-          if (!ctx) return;
-          drawing.current = true;
-          const p = pos(e);
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-        }}
-        onPointerMove={(e) => {
-          if (!drawing.current) return;
-          const ctx = e.currentTarget.getContext("2d");
-          if (!ctx) return;
-          const p = pos(e);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-          dirty.current = true;
-          if (empty) setEmpty(false);
-        }}
-        onPointerUp={() => {
-          drawing.current = false;
-          if (dirty.current) emit();
-        }}
-        onPointerLeave={() => {
-          if (!drawing.current) return;
-          drawing.current = false;
-          if (dirty.current) emit();
-        }}
-      />
-      <button type="button" onClick={clear} className="mt-1 text-[11px] font-semibold text-muted-foreground underline">
-        {clearLabel}
-      </button>
+    <div className="space-y-2">
+      <div className="relative rounded-xl border border-dashed border-border bg-background overflow-hidden touch-none">
+        <canvas
+          ref={canvasRef}
+          width={360}
+          height={150}
+          className="w-full h-[150px] cursor-crosshair block"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+        />
+        {!hasContent && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground select-none">
+            {t("এখানে স্বাক্ষর করুন", "Sign here with finger/stylus")}
+          </div>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleClear}
+          className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+        >
+          {t("পরিষ্কার করুন", "Clear signature")}
+        </button>
+      </div>
     </div>
   );
 }

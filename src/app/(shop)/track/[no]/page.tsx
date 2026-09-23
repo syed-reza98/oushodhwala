@@ -14,6 +14,17 @@ type TrackPayload = {
   createdAt: string;
   items: { name: string; qty: number; lineTotal: number }[];
   events?: { id: string; status: string; note: string; createdAt: string }[];
+  delivery?: {
+    status: string;
+    etaMinutes: number;
+    lastLat: number | null;
+    lastLng: number | null;
+    lastSeenAt: string | null;
+    rider: { name: string; phone: string; vehicle: string } | null;
+    events: { id: string; status: string; note: string; createdAt: string }[];
+    otp: string | null;
+    pod: { photoUrl?: string; signatureUrl?: string; receiverName?: string } | null;
+  } | null;
 };
 
 const STATUS_BN: Record<string, [string, string]> = {
@@ -92,6 +103,67 @@ export default function TrackPage() {
               </li>
             ))}
           </ul>
+
+          {data.delivery && (
+            <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-sm text-navy">{t("ডেলিভারি ট্র্যাকিং", "Delivery Tracking")}</p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t("স্ট্যাটাস:", "Status:")} <span className="font-semibold text-primary">{data.delivery.status}</span> · ETA ~{data.delivery.etaMinutes}m
+                  </p>
+                </div>
+                {data.delivery.otp && data.delivery.status !== "delivered" && (
+                  <div className="rounded-xl border border-primary/40 bg-card px-3 py-1.5 text-center shadow-xs">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground">{t("ডেলিভারি OTP", "Delivery OTP")}</p>
+                    <p className="text-base font-extrabold tracking-widest text-primary font-mono">{data.delivery.otp}</p>
+                  </div>
+                )}
+              </div>
+
+              {data.delivery.rider && (
+                <div className="mt-3 pt-3 border-t border-primary/20 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{data.delivery.rider.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {data.delivery.rider.vehicle} · {data.delivery.rider.phone}
+                    </p>
+                  </div>
+                  {data.delivery.rider.phone && (
+                    <a
+                      href={`tel:${data.delivery.rider.phone}`}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground"
+                    >
+                      {t("কল করুন", "Call")}
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {data.delivery.pod && (
+                <div className="mt-3 pt-3 border-t border-primary/20 space-y-2">
+                  <p className="font-semibold text-[11px] text-navy">{t("ডেলিভারি প্রমাণ (POD)", "Proof of Delivery (POD)")}</p>
+                  {data.delivery.pod.receiverName && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {t("পণ্য গ্রহণকারী:", "Receiver:")} <span className="font-medium text-foreground">{data.delivery.pod.receiverName}</span>
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    {data.delivery.pod.photoUrl && (
+                      <a href={data.delivery.pod.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline font-medium">
+                        📷 {t("ছবি দেখুন", "View Photo")}
+                      </a>
+                    )}
+                    {data.delivery.pod.signatureUrl && (
+                      <a href={data.delivery.pod.signatureUrl} target="_blank" rel="noreferrer" className="text-primary underline font-medium">
+                        ✍️ {t("স্বাক্ষর দেখুন", "View Signature")}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {(data.events?.length ?? 0) > 0 && (
             <div className="rounded-2xl border border-border bg-card p-4">

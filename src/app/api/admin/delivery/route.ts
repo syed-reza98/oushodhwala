@@ -118,6 +118,16 @@ export async function GET(req: NextRequest) {
     deliveries: deliveryRows.map((d) => {
       const rider = d.riderId ? riderMap.get(d.riderId) : undefined;
       const last = latestByDelivery.get(d.id);
+      const deliveryMeta = (d.note ? (d.note.startsWith("{") ? JSON.parse(d.note) : null) : null) as {
+        otp?: string;
+        podPhotoUrl?: string;
+        podSignatureUrl?: string;
+        podReceiverName?: string;
+      } | null;
+
+      // Extract 4-digit OTP from delivery ID or orderNo if not in meta
+      const otp = deliveryMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
+
       return {
         id: d.id,
         orderId: d.orderId,
@@ -131,6 +141,10 @@ export async function GET(req: NextRequest) {
         lastLng: d.lastLng != null ? Number(d.lastLng) : null,
         lastSeenAt: d.lastSeenAt,
         assignedAt: d.assignedAt,
+        otp,
+        podPhotoUrl: deliveryMeta?.podPhotoUrl ?? null,
+        podSignatureUrl: deliveryMeta?.podSignatureUrl ?? null,
+        podReceiverName: deliveryMeta?.podReceiverName ?? null,
         lastEvent: last
           ? { status: last.status, note: last.note, createdAt: last.createdAt }
           : null,
@@ -240,6 +254,10 @@ export async function PATCH(req: NextRequest) {
     status?: string;
     deliveryId?: string;
     note?: string;
+    otp?: string;
+    podPhotoUrl?: string;
+    podSignatureUrl?: string;
+    podReceiverName?: string;
   };
 
   if (body.action === "toggle_rider" && body.id) {
@@ -255,14 +273,41 @@ export async function PATCH(req: NextRequest) {
       .limit(1);
     if (!d) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
+    const existingMeta = (d.note ? (d.note.startsWith("{") ? JSON.parse(d.note) : null) : null) as {
+      otp?: string;
+      podPhotoUrl?: string;
+      podSignatureUrl?: string;
+      podReceiverName?: string;
+    } | null;
+
+    const expectedOtp = existingMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
+
+    if (body.status === "delivered" && body.otp) {
+      if (body.otp.trim() !== expectedOtp.trim()) {
+        return NextResponse.json({ error: "BAD_OTP: ওটিপি সঠিক নয়।" }, { status: 400 });
+      }
+    }
+
+    const updatedMeta = {
+      ...(existingMeta ?? {}),
+      ...(body.otp ? { otp: body.otp.trim() } : {}),
+      ...(body.podPhotoUrl ? { podPhotoUrl: body.podPhotoUrl } : {}),
+      ...(body.podSignatureUrl ? { podSignatureUrl: body.podSignatureUrl } : {}),
+      ...(body.podReceiverName ? { podReceiverName: body.podReceiverName } : {}),
+    };
+
     await db
       .update(deliveries)
-      .set({ status: body.status })
+      .set({
+        status: body.status,
+        note: JSON.stringify(updatedMeta),
+      })
       .where(eq(deliveries.id, body.deliveryId));
+
     await logEvent({
       deliveryId: body.deliveryId,
       status: body.status,
-      note: body.note,
+      note: body.note || (body.podReceiverName ? `গ্রহণকারী: ${body.podReceiverName}` : undefined),
       actor: "staff",
     });
 
@@ -318,7 +363,11 @@ export async function PATCH(req: NextRequest) {
     .limit(1);
 
   let deliveryId = existing?.id;
+  const initialOtp = String(Math.floor(1000 + Math.random() * 9000));
   if (existing) {
+    const existingMeta = (existing.note && existing.note.startsWith("{") ? JSON.parse(existing.note) : {}) as Record<string, unknown>;
+    if (!existingMeta.otp) existingMeta.otp = initialOtp;
+
     await db
       .update(deliveries)
       .set({
@@ -327,6 +376,7 @@ export async function PATCH(req: NextRequest) {
         etaMinutes: body.etaMinutes ?? 45,
         assignedAt: now,
         orderNo: order.orderNo,
+        note: JSON.stringify(existingMeta),
       })
       .where(eq(deliveries.id, existing.id));
   } else {
@@ -340,6 +390,7 @@ export async function PATCH(req: NextRequest) {
       status: "assigned",
       etaMinutes: body.etaMinutes ?? 45,
       assignedAt: now,
+      note: JSON.stringify({ otp: initialOtp }),
     });
   }
 

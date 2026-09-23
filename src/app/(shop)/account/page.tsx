@@ -168,6 +168,12 @@ export default function AccountPage() {
 
       <div className="mt-5 grid gap-2 sm:grid-cols-2">
         <Link
+          href="/account/loyalty"
+          className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-xs font-semibold"
+        >
+          <span className="text-base">🎁</span> {t("লয়্যালটি পয়েন্ট", "Loyalty points")}
+        </Link>
+        <Link
           href="/account/medicines"
           className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-3 text-xs font-semibold"
         >

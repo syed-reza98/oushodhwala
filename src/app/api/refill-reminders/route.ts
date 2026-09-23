@@ -16,25 +16,39 @@ export async function GET(req: NextRequest) {
   }
 
   const productId = (req.nextUrl.searchParams.get("productId") ?? "").trim();
-  if (!productId) {
-    return NextResponse.json({ error: "productId required" }, { status: 400 });
+  if (productId) {
+    const [row] = await db
+      .select()
+      .from(refillReminders)
+      .where(and(eq(refillReminders.userId, user.id), eq(refillReminders.productId, productId)))
+      .limit(1);
+
+    return NextResponse.json({
+      item: row
+        ? {
+            id: row.id,
+            everyDays: row.everyDays,
+            nextAt: row.nextAt,
+            active: row.active,
+          }
+        : null,
+    });
   }
 
-  const [row] = await db
+  const rows = await db
     .select()
     .from(refillReminders)
-    .where(and(eq(refillReminders.userId, user.id), eq(refillReminders.productId, productId)))
-    .limit(1);
+    .where(eq(refillReminders.userId, user.id));
 
   return NextResponse.json({
-    item: row
-      ? {
-          id: row.id,
-          everyDays: row.everyDays,
-          nextAt: row.nextAt,
-          active: row.active,
-        }
-      : null,
+    items: rows.map((r) => ({
+      id: r.id,
+      productId: r.productId,
+      productName: r.productName,
+      everyDays: r.everyDays,
+      nextAt: r.nextAt,
+      active: r.active,
+    })),
   });
 }
 

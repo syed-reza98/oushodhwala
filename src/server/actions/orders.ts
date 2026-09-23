@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
-import { orderEvents, orderItems, orderReturns, orders, products } from "@/server/db/schema";
+import { loyaltyAccounts, loyaltyTransactions, orderEvents, orderItems, orderReturns, orders, products } from "@/server/db/schema";
 
 export type PlaceOrderItem = {
   id: string;
@@ -24,6 +24,7 @@ export type PlaceOrderInput = {
   discount: number;
   paymentMethod: string;
   paymentRef?: string;
+  usePoints?: boolean;
 };
 
 function orderNo() {
@@ -41,12 +42,91 @@ export async function placeOrder(input: PlaceOrderInput) {
   const productLines = input.items.filter((i) => i.kind === "product");
 
   const subtotal = input.items.reduce((s, i) => s + i.price * i.qty, 0);
-  const total = Math.max(0, subtotal - input.discount + input.deliveryFee);
   const id = randomUUID();
   const no = orderNo();
   const publicToken = randomBytes(9).toString("hex");
 
+  let finalTotal = 0;
+
   await db.transaction(async (tx) => {
+    // Check & redeem loyalty points if requested
+    let pointCut = 0;
+    if (input.usePoints) {
+      const [acc] = await tx
+        .select()
+        .from(loyaltyAccounts)
+        .where(eq(loyaltyAccounts.userId, session.user!.id))
+        .limit(1);
+
+      if (acc && acc.balance > 0) {
+        const payableBeforePoints = Math.max(0, subtotal - input.discount + input.deliveryFee);
+        pointCut = Math.min(acc.balance, Math.floor(payableBeforePoints * 0.5));
+        if (pointCut > 0) {
+          const nextBal = acc.balance - pointCut;
+          await tx
+            .update(loyaltyAccounts)
+            .set({
+              pointsSpent: acc.pointsSpent + pointCut,
+              balance: nextBal,
+              tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
+            })
+            .where(eq(loyaltyAccounts.userId, session.user!.id));
+
+          await tx.insert(loyaltyTransactions).values({
+            id: randomUUID(),
+            userId: session.user!.id,
+            points: -pointCut,
+            kind: "spend",
+            orderNo: no,
+            reason: `অর্ডারে পয়েন্ট ব্যবহার #${no}`,
+          });
+        }
+      }
+    }
+
+    const totalDiscount = input.discount + pointCut;
+    const total = Math.max(0, subtotal - totalDiscount + input.deliveryFee);
+    finalTotal = total;
+
+    // Award loyalty points for purchase (e.g. 1 point per ৳100 spent)
+    const earnedPoints = Math.floor(total / 100);
+    if (earnedPoints > 0) {
+      const [acc] = await tx
+        .select()
+        .from(loyaltyAccounts)
+        .where(eq(loyaltyAccounts.userId, session.user!.id))
+        .limit(1);
+
+      if (acc) {
+        const nextBal = acc.balance + earnedPoints;
+        await tx
+          .update(loyaltyAccounts)
+          .set({
+            pointsEarned: acc.pointsEarned + earnedPoints,
+            balance: nextBal,
+            tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
+          })
+          .where(eq(loyaltyAccounts.userId, session.user!.id));
+      } else {
+        await tx.insert(loyaltyAccounts).values({
+          userId: session.user!.id,
+          pointsEarned: earnedPoints,
+          pointsSpent: 0,
+          balance: earnedPoints,
+          tier: earnedPoints >= 2000 ? "gold" : earnedPoints >= 500 ? "silver" : "bronze",
+        });
+      }
+
+      await tx.insert(loyaltyTransactions).values({
+        id: randomUUID(),
+        userId: session.user!.id,
+        points: earnedPoints,
+        kind: "earn",
+        orderNo: no,
+        reason: `অর্ডার থেকে পয়েন্ট লাভ #${no}`,
+      });
+    }
+
     // Atomic stock check and decrement to prevent race conditions & overselling
     for (const line of productLines) {
       const [res] = await tx
@@ -81,14 +161,18 @@ export async function placeOrder(input: PlaceOrderInput) {
       paymentMethod: input.paymentMethod,
       paymentStatus: input.paymentMethod === "cod" ? "pending" : "paid",
       subtotal: String(subtotal),
-      discount: String(input.discount),
+      discount: String(totalDiscount),
       deliveryFee: String(input.deliveryFee),
       total: String(total),
       customerName: input.customerName,
       customerPhone: input.phone,
       deliveryAddress: input.address,
       notes: input.slot,
-      meta: input.paymentRef ? { paymentRef: input.paymentRef } : null,
+      meta: {
+        ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
+        ...(pointCut > 0 ? { pointsRedeemed: pointCut } : {}),
+        ...(earnedPoints > 0 ? { pointsEarned: earnedPoints } : {}),
+      },
       publicToken,
     });
 
@@ -112,7 +196,7 @@ export async function placeOrder(input: PlaceOrderInput) {
     });
   });
 
-  return { order_no: no, order_id: id, total, public_token: publicToken };
+  return { order_no: no, order_id: id, total: finalTotal, public_token: publicToken };
 }
 
 export async function listMyOrders() {

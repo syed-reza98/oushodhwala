@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 import { useCatalog, catalogQueryKey, deliveryChargeFor } from "@/lib/catalog-db";
@@ -46,9 +46,20 @@ export default function CheckoutPage() {
   ] as const;
   const [slot, setSlot] = useState<string>(SLOTS[0].bn);
   const [express, setExpress] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
   const [form, setForm] = useState({ label: "", area: "", details: "", phone: "" });
   const [showForm, setShowForm] = useState(false);
   const [placed, setPlaced] = useState<string | null>(null);
+
+  const loyaltyQ = useQuery({
+    queryKey: ["my-loyalty"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/account/loyalty", { cache: "no-store" });
+      if (!res.ok) return { balance: 0, tier: "silver" };
+      return res.json() as Promise<{ balance: number; tier: string }>;
+    },
+  });
 
   const appliedOffer = offers.find((o) => o.code === couponCode && subtotal >= o.minOrder) ?? null;
   const couponCut = appliedOffer
@@ -61,7 +72,13 @@ export default function CheckoutPage() {
   const effectiveSlot = expressOn
     ? t(`জরুরি ডেলিভারি (${settings.expressEta})`, `Express delivery (${settings.expressEta})`)
     : t(slot, slotLabel?.en ?? slot);
-  const total = Math.max(0, subtotal - couponCut + delivery);
+
+  const payableBeforePoints = Math.max(0, subtotal - couponCut + delivery);
+  const pointBalance = loyaltyQ.data?.balance ?? 0;
+  const maxPoints = Math.min(pointBalance, Math.floor(payableBeforePoints * 0.5));
+  const pointCut = usePoints ? maxPoints : 0;
+  const total = Math.max(0, payableBeforePoints - pointCut);
+
   const payments = ALL_PAYMENTS.filter((m) => settings[m.key]);
   const method: string = payments.some((m) => m.id === payment) ? payment : (payments[0]?.id ?? "cod");
   const addr = addresses.find((a) => a.id === activeAddress) ?? addresses[0];
@@ -110,11 +127,13 @@ export default function CheckoutPage() {
         discount: couponCut,
         paymentMethod: method,
         paymentRef: ref,
+        usePoints,
       });
       clear();
       setCouponCode(null);
       void qc.invalidateQueries({ queryKey: catalogQueryKey });
       void qc.invalidateQueries({ queryKey: ["my-orders"] });
+      void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
       setPlaced(data.order_no);
     } catch (e) {
       const msg = e instanceof Error ? e.message : t("অর্ডার সম্পন্ন হয়নি", "Order could not be placed");
@@ -337,6 +356,33 @@ export default function CheckoutPage() {
               <dt className="text-muted-foreground">{t("ডেলিভারি", "Delivery")}</dt>
               <dd className="font-semibold">{delivery === 0 ? t("ফ্রি", "Free") : t.money(delivery)}</dd>
             </div>
+
+            {pointBalance > 0 && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 mt-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={usePoints}
+                      onChange={(e) => setUsePoints(e.target.checked)}
+                      className="rounded text-primary"
+                    />
+                    {t(`লয়ালটি পয়েন্ট ব্যবহার (${t.n(pointBalance)})`, `Use loyalty points (${t.n(pointBalance)})`)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {t(`সর্বোচ্চ ৳${maxPoints}`, `Max ৳${maxPoints}`)}
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {pointCut > 0 && (
+              <div className="flex justify-between text-primary">
+                <dt className="font-medium">{t("পয়েন্ট ছাড়", "Points discount")}</dt>
+                <dd className="font-semibold">− {t.money(pointCut)}</dd>
+              </div>
+            )}
+
             <div className="flex justify-between border-t border-border pt-2 text-sm font-bold">
               <dt>{t("সর্বমোট", "Total")}</dt>
               <dd className="text-primary-dark">{t.money(total)}</dd>
