@@ -24,6 +24,8 @@ export async function searchProducts(input: {
     sort?: string;
     rx?: boolean;
     maxPrice?: number;
+    company?: string;
+    group?: string;
     offset?: number;
     limit?: number;
   };
@@ -32,6 +34,8 @@ export async function searchProducts(input: {
   const d = input.data;
   if (d.q) p.set("q", d.q);
   if (d.category) p.set("category", d.category);
+  if (d.company) p.set("company", d.company);
+  if (d.group) p.set("group", d.group);
   if (d.sort) p.set("sort", d.sort);
   if (d.rx) p.set("rx", "1");
   if (d.maxPrice != null) p.set("maxPrice", String(d.maxPrice));

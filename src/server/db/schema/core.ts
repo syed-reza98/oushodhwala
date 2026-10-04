@@ -156,6 +156,10 @@ export const products = mysqlTable(
     index("products_category_idx").on(t.category),
     index("products_generic_idx").on(t.generic),
     index("products_active_idx").on(t.active),
+    index("products_base_name_idx").on(t.baseName),
+    index("products_brand_idx").on(t.brand),
+    index("products_manufacturer_idx").on(t.manufacturer),
+    index("products_therapeutic_class_idx").on(t.therapeuticClass),
   ],
 );
 

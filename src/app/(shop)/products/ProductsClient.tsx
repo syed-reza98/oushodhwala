@@ -23,7 +23,7 @@ export default function ProductsClient() {
     category: sp.get("category") ?? "all",
     sort: sp.get("sort") ?? "popular",
   };
-  const [maxPrice, setMaxPrice] = useState(6000);
+  const [maxPrice, setMaxPrice] = useState(0);
   const [rxOnly, setRxOnly] = useState(false);
   const [page, setPage] = useState(0);
   const PAGE = 40;
@@ -41,7 +41,7 @@ export default function ProductsClient() {
           category: search.category,
           sort: search.sort,
           rx: rxOnly,
-          maxPrice,
+          maxPrice: maxPrice > 0 ? maxPrice : undefined,
           offset: page * PAGE,
           limit: PAGE,
         },
@@ -111,14 +111,18 @@ export default function ProductsClient() {
           </select>
         </label>
         <label className="flex items-center gap-2 text-xs font-semibold">
-          {t("সর্বোচ্চ দাম:", "Max price:")} {t.money(maxPrice)}
+          {t("সর্বোচ্চ দাম:", "Max price:")}{" "}
+          {maxPrice > 0 ? t.money(maxPrice) : t("সব দাম", "Any price")}
           <input
             type="range"
             min={50}
-            max={6000}
-            step={50}
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(Number(e.target.value))}
+            max={50000}
+            step={100}
+            value={maxPrice || 50000}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              setMaxPrice(val >= 50000 ? 0 : val);
+            }}
           />
         </label>
         <label className="flex items-center gap-2 text-xs font-semibold">

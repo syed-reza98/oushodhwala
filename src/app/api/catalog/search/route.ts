@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
     category: sp.get("category") ?? "all",
     sort: sp.get("sort") ?? "popular",
     rx: sp.get("rx") === "1",
+    company: sp.get("company") ?? "",
+    group: sp.get("group") ?? "",
     maxPrice: Number(sp.get("maxPrice") ?? 0) || undefined,
     offset: Number(sp.get("offset") ?? 0) || 0,
     limit: Number(sp.get("limit") ?? 40) || 40,

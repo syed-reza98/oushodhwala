@@ -21,6 +21,8 @@ export type SearchProductsInput = {
   maxPrice?: number;
   offset?: number;
   limit?: number;
+  company?: string;
+  group?: string;
 };
 
 export async function searchProducts(input: SearchProductsInput | string, limitArg = 40) {
@@ -32,6 +34,8 @@ export async function searchProducts(input: SearchProductsInput | string, limitA
   const limit = opts.limit ?? 40;
   const offset = opts.offset ?? 0;
   const category = opts.category && opts.category !== "all" ? opts.category : "";
+  const company = (opts.company ?? "").trim();
+  const group = (opts.group ?? "").trim();
   const maxPrice = opts.maxPrice ?? 0;
   const rxOnly = Boolean(opts.rx);
 
@@ -44,10 +48,13 @@ export async function searchProducts(input: SearchProductsInput | string, limitA
         like(products.en, term),
         like(products.generic, term),
         like(products.brand, term),
+        like(products.manufacturer, term),
       )!,
     );
   }
   if (category) filters.push(eq(products.category, category));
+  if (company) filters.push(eq(products.manufacturer, company));
+  if (group) filters.push(eq(products.therapeuticClass, group));
   if (rxOnly) filters.push(eq(products.rx, true));
   if (maxPrice > 0) filters.push(lte(products.price, String(maxPrice)));
 
@@ -186,4 +193,23 @@ export async function countProducts() {
     .select({ count: sql<number>`count(*)` })
     .from(products);
   return Number(row?.count ?? 0);
+}
+
+export async function getMedicineFilters() {
+  const [companyRows, groupRows] = await Promise.all([
+    db
+      .selectDistinct({ manufacturer: products.manufacturer })
+      .from(products)
+      .where(and(eq(products.active, true), sql`${products.manufacturer} IS NOT NULL AND ${products.manufacturer} != ''`))
+      .orderBy(asc(products.manufacturer)),
+    db
+      .selectDistinct({ therapeuticClass: products.therapeuticClass })
+      .from(products)
+      .where(and(eq(products.active, true), sql`${products.therapeuticClass} IS NOT NULL AND ${products.therapeuticClass} != ''`))
+      .orderBy(asc(products.therapeuticClass)),
+  ]);
+  return {
+    companies: companyRows.map((r) => r.manufacturer!).filter(Boolean),
+    groups: groupRows.map((r) => r.therapeuticClass!).filter(Boolean),
+  };
 }

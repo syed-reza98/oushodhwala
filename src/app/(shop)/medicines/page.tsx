@@ -1,44 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useCatalog } from "@/lib/catalog-db";
+import { useState, useTransition } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { searchProducts, getMedicineFilters } from "@/server/actions/catalog";
+import { mapProduct } from "@/lib/catalog-db";
 import { useT } from "@/lib/i18n";
-import { matchesQuery } from "@/lib/bn-search";
 
 const PAGE = 50;
 
 export default function MedicinesPage() {
   const t = useT();
-  const { products } = useCatalog();
+  const [, startTransition] = useTransition();
   const [q, setQ] = useState("");
+  const [inputQ, setInputQ] = useState("");
   const [group, setGroup] = useState("");
   const [company, setCompany] = useState("");
   const [page, setPage] = useState(0);
 
-  const groups = useMemo(
-    () =>
-      Array.from(new Set(products.map((p) => p.therapeuticClass || p.category).filter(Boolean))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [products],
-  );
-  const companies = useMemo(
-    () => Array.from(new Set(products.map((p) => p.manufacturer || p.brand).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
-    [products],
-  );
+  const { data: filtersData } = useQuery({
+    queryKey: ["medicine-filters"],
+    queryFn: () => getMedicineFilters(),
+    staleTime: 600_000,
+  });
 
-  const filtered = useMemo(() => {
-    return products.filter((p) => {
-      if (group && (p.therapeuticClass || p.category) !== group) return false;
-      if (company && (p.manufacturer || p.brand) !== company) return false;
-      return matchesQuery(q, p.name, p.en, p.generic, p.brand);
-    });
-  }, [products, q, group, company]);
+  const { data: searchResult, isFetching } = useQuery({
+    queryKey: ["medicines-directory", q, company, group, page],
+    queryFn: () =>
+      searchProducts({
+        q,
+        company,
+        group,
+        offset: page * PAGE,
+        limit: PAGE,
+      }),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
 
-  const total = filtered.length;
+  const rows = (searchResult?.rows ?? []).map(
+    (r) => mapProduct(r as unknown as Parameters<typeof mapProduct>[0]),
+  );
+  const total = searchResult?.count ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE));
-  const rows = filtered.slice(page * PAGE, page * PAGE + PAGE);
+
+  const companies = filtersData?.companies ?? [];
+  const groups = filtersData?.groups ?? [];
 
   return (
     <div className="pt-4 pb-10">
@@ -59,27 +66,34 @@ export default function MedicinesPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            setPage(0);
+            startTransition(() => {
+              setQ(inputQ);
+              setPage(0);
+            });
           }}
           className="flex gap-2"
         >
           <input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(0);
-            }}
+            value={inputQ}
+            onChange={(e) => setInputQ(e.target.value)}
             placeholder={t("নাম / জেনেরিক দিয়ে খুঁজুন", "Search name / generic")}
             className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs"
           />
+          <button
+            type="submit"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+          >
+            {t("খুঁজুন", "Search")}
+          </button>
         </form>
+
         <select
           value={group}
           onChange={(e) => {
             setGroup(e.target.value);
             setPage(0);
           }}
-          className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+          className="rounded-md border border-border bg-background px-2 py-1.5 text-xs truncate"
         >
           <option value="">{t("সব গ্রুপ", "All groups")}</option>
           {groups.map((g) => (
@@ -88,13 +102,14 @@ export default function MedicinesPage() {
             </option>
           ))}
         </select>
+
         <select
           value={company}
           onChange={(e) => {
             setCompany(e.target.value);
             setPage(0);
           }}
-          className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+          className="rounded-md border border-border bg-background px-2 py-1.5 text-xs truncate"
         >
           <option value="">{t("সব কোম্পানি", "All companies")}</option>
           {companies.map((c) => (
@@ -103,9 +118,10 @@ export default function MedicinesPage() {
             </option>
           ))}
         </select>
+
         <Link
           href="/products"
-          className="grid place-items-center rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-primary"
+          className="grid place-items-center rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-primary hover:bg-muted/30 transition"
         >
           {t("শপে দেখুন", "Shop view")}
         </Link>
@@ -124,9 +140,9 @@ export default function MedicinesPage() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-border align-top">
+              <tr key={r.id} className="border-t border-border align-top hover:bg-muted/20 transition">
                 <td className="px-3 py-2">
-                  <Link href={`/medicine/${r.id}`} className="font-semibold text-primary">
+                  <Link href={`/medicine/${r.id}`} className="font-semibold text-primary hover:underline">
                     {r.en || r.name}
                   </Link>
                   <div className="text-[11px] text-muted-foreground">
@@ -140,7 +156,7 @@ export default function MedicinesPage() {
                 <td className="px-3 py-2 text-right font-semibold">{t.money(r.price)}</td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {!isFetching && rows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
                   {t("কোনো ঔষধ পাওয়া যায়নি", "No medicines found")}
@@ -154,7 +170,7 @@ export default function MedicinesPage() {
       <div className="mt-4 flex items-center justify-center gap-3">
         <button
           type="button"
-          disabled={page === 0}
+          disabled={page === 0 || isFetching}
           onClick={() => setPage((n) => Math.max(0, n - 1))}
           className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold disabled:opacity-40"
         >
@@ -165,7 +181,7 @@ export default function MedicinesPage() {
         </span>
         <button
           type="button"
-          disabled={(page + 1) * PAGE >= total}
+          disabled={(page + 1) * PAGE >= total || isFetching}
           onClick={() => setPage((n) => n + 1)}
           className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold disabled:opacity-40"
         >
