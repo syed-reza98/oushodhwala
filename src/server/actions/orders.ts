@@ -28,17 +28,34 @@ export type PlaceOrderInput = {
   prescriptionId?: string;
 };
 
+export type PlaceOrderResult =
+  | {
+      success: true;
+      order_no: string;
+      order_id: string;
+      total: number;
+      public_token: string;
+    }
+  | {
+      success: false;
+      error: string;
+      productName?: string;
+      stockLeft?: number;
+    };
+
 function orderNo() {
   const n = Date.now().toString().slice(-8);
   return `OW${n}`;
 }
 
-export async function placeOrder(input: PlaceOrderInput) {
+export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error("AUTH_REQUIRED");
+    return { success: false, error: "AUTH_REQUIRED" };
   }
-  if (!input.items.length) throw new Error("EMPTY_CART");
+  if (!input.items.length) {
+    return { success: false, error: "EMPTY_CART" };
+  }
 
   const productLines = input.items.filter((i) => i.kind === "product");
 
@@ -48,164 +65,187 @@ export async function placeOrder(input: PlaceOrderInput) {
   const publicToken = randomBytes(9).toString("hex");
 
   let finalTotal = 0;
+  let stockError: { productName: string; stockLeft: number } | null = null;
 
-  await db.transaction(async (tx) => {
-    // Check & redeem loyalty points if requested
-    let pointCut = 0;
-    if (input.usePoints) {
-      const [acc] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, session.user!.id))
-        .limit(1);
+  try {
+    await db.transaction(async (tx) => {
+      // Atomic stock check and decrement to prevent race conditions & overselling
+      for (const line of productLines) {
+        const [res] = await tx
+          .update(products)
+          .set({ stock: sql`${products.stock} - ${line.qty}` })
+          .where(
+            and(
+              eq(products.id, line.id),
+              gte(products.stock, line.qty),
+              eq(products.active, true),
+            ),
+          );
 
-      if (acc && acc.balance > 0) {
-        const payableBeforePoints = Math.max(0, subtotal - input.discount + input.deliveryFee);
-        pointCut = Math.min(acc.balance, Math.floor(payableBeforePoints * 0.5));
-        if (pointCut > 0) {
-          const nextBal = acc.balance - pointCut;
+        const affected = (res as { affectedRows?: number })?.affectedRows ?? 0;
+        if (affected === 0) {
+          const [current] = await tx
+            .select({ name: products.name, stock: products.stock })
+            .from(products)
+            .where(eq(products.id, line.id))
+            .limit(1);
+          stockError = {
+            productName: current?.name ?? line.name,
+            stockLeft: current?.stock ?? 0,
+          };
+          throw new Error("OUT_OF_STOCK_INTERNAL");
+        }
+      }
+
+      // Check & redeem loyalty points if requested
+      let pointCut = 0;
+      if (input.usePoints) {
+        const [acc] = await tx
+          .select()
+          .from(loyaltyAccounts)
+          .where(eq(loyaltyAccounts.userId, session.user!.id))
+          .limit(1);
+
+        if (acc && acc.balance > 0) {
+          const payableBeforePoints = Math.max(0, subtotal - input.discount + input.deliveryFee);
+          pointCut = Math.min(acc.balance, Math.floor(payableBeforePoints * 0.5));
+          if (pointCut > 0) {
+            const nextBal = acc.balance - pointCut;
+            await tx
+              .update(loyaltyAccounts)
+              .set({
+                pointsSpent: acc.pointsSpent + pointCut,
+                balance: nextBal,
+                tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
+              })
+              .where(eq(loyaltyAccounts.userId, session.user!.id));
+
+            await tx.insert(loyaltyTransactions).values({
+              id: randomUUID(),
+              userId: session.user!.id,
+              points: -pointCut,
+              kind: "spend",
+              orderNo: no,
+              reason: `অর্ডারে পয়েন্ট ব্যবহার #${no}`,
+            });
+          }
+        }
+      }
+
+      const totalDiscount = input.discount + pointCut;
+      const total = Math.max(0, subtotal - totalDiscount + input.deliveryFee);
+      finalTotal = total;
+
+      // Award loyalty points for purchase (e.g. 1 point per ৳100 spent)
+      const earnedPoints = Math.floor(total / 100);
+      if (earnedPoints > 0) {
+        const [acc] = await tx
+          .select()
+          .from(loyaltyAccounts)
+          .where(eq(loyaltyAccounts.userId, session.user!.id))
+          .limit(1);
+
+        if (acc) {
+          const nextBal = acc.balance + earnedPoints;
           await tx
             .update(loyaltyAccounts)
             .set({
-              pointsSpent: acc.pointsSpent + pointCut,
+              pointsEarned: acc.pointsEarned + earnedPoints,
               balance: nextBal,
               tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
             })
             .where(eq(loyaltyAccounts.userId, session.user!.id));
-
-          await tx.insert(loyaltyTransactions).values({
-            id: randomUUID(),
+        } else {
+          await tx.insert(loyaltyAccounts).values({
             userId: session.user!.id,
-            points: -pointCut,
-            kind: "spend",
-            orderNo: no,
-            reason: `অর্ডারে পয়েন্ট ব্যবহার #${no}`,
+            pointsEarned: earnedPoints,
+            pointsSpent: 0,
+            balance: earnedPoints,
+            tier: earnedPoints >= 2000 ? "gold" : earnedPoints >= 500 ? "silver" : "bronze",
           });
         }
-      }
-    }
 
-    const totalDiscount = input.discount + pointCut;
-    const total = Math.max(0, subtotal - totalDiscount + input.deliveryFee);
-    finalTotal = total;
-
-    // Award loyalty points for purchase (e.g. 1 point per ৳100 spent)
-    const earnedPoints = Math.floor(total / 100);
-    if (earnedPoints > 0) {
-      const [acc] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, session.user!.id))
-        .limit(1);
-
-      if (acc) {
-        const nextBal = acc.balance + earnedPoints;
-        await tx
-          .update(loyaltyAccounts)
-          .set({
-            pointsEarned: acc.pointsEarned + earnedPoints,
-            balance: nextBal,
-            tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
-          })
-          .where(eq(loyaltyAccounts.userId, session.user!.id));
-      } else {
-        await tx.insert(loyaltyAccounts).values({
+        await tx.insert(loyaltyTransactions).values({
+          id: randomUUID(),
           userId: session.user!.id,
-          pointsEarned: earnedPoints,
-          pointsSpent: 0,
-          balance: earnedPoints,
-          tier: earnedPoints >= 2000 ? "gold" : earnedPoints >= 500 ? "silver" : "bronze",
+          points: earnedPoints,
+          kind: "earn",
+          orderNo: no,
+          reason: `অর্ডার থেকে পয়েন্ট লাভ #${no}`,
         });
       }
 
-      await tx.insert(loyaltyTransactions).values({
-        id: randomUUID(),
-        userId: session.user!.id,
-        points: earnedPoints,
-        kind: "earn",
+      await tx.insert(orders).values({
+        id,
         orderNo: no,
-        reason: `অর্ডার থেকে পয়েন্ট লাভ #${no}`,
+        userId: session.user!.id,
+        status: "confirmed",
+        paymentMethod: input.paymentMethod,
+        paymentStatus: input.paymentMethod === "cod" ? "pending" : "paid",
+        subtotal: String(subtotal),
+        discount: String(totalDiscount),
+        deliveryFee: String(input.deliveryFee),
+        total: String(total),
+        customerName: input.customerName,
+        customerPhone: input.phone,
+        deliveryAddress: input.address,
+        notes: input.slot,
+        meta: {
+          ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
+          ...(pointCut > 0 ? { pointsRedeemed: pointCut } : {}),
+          ...(earnedPoints > 0 ? { pointsEarned: earnedPoints } : {}),
+          ...(input.prescriptionId ? { prescriptionId: input.prescriptionId } : {}),
+        },
+        publicToken,
       });
-    }
 
-    // Atomic stock check and decrement to prevent race conditions & overselling
-    for (const line of productLines) {
-      const [res] = await tx
-        .update(products)
-        .set({ stock: sql`${products.stock} - ${line.qty}` })
-        .where(
-          and(
-            eq(products.id, line.id),
-            gte(products.stock, line.qty),
-            eq(products.active, true),
-          ),
-        );
-
-      const affected = (res as { affectedRows?: number })?.affectedRows ?? 0;
-      if (affected === 0) {
-        const [current] = await tx
-          .select({ name: products.name, stock: products.stock })
-          .from(products)
-          .where(eq(products.id, line.id))
-          .limit(1);
-        throw new Error(
-          `OUT_OF_STOCK:${current?.name ?? line.name}:${current?.stock ?? 0}`,
-        );
+      if (input.prescriptionId) {
+        await tx
+          .update(prescriptions)
+          .set({ status: "reviewing" })
+          .where(eq(prescriptions.id, input.prescriptionId));
       }
-    }
 
-    await tx.insert(orders).values({
-      id,
-      orderNo: no,
-      userId: session.user!.id,
-      status: "confirmed",
-      paymentMethod: input.paymentMethod,
-      paymentStatus: input.paymentMethod === "cod" ? "pending" : "paid",
-      subtotal: String(subtotal),
-      discount: String(totalDiscount),
-      deliveryFee: String(input.deliveryFee),
-      total: String(total),
-      customerName: input.customerName,
-      customerPhone: input.phone,
-      deliveryAddress: input.address,
-      notes: input.slot,
-      meta: {
-        ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
-        ...(pointCut > 0 ? { pointsRedeemed: pointCut } : {}),
-        ...(earnedPoints > 0 ? { pointsEarned: earnedPoints } : {}),
-        ...(input.prescriptionId ? { prescriptionId: input.prescriptionId } : {}),
-      },
-      publicToken,
-    });
+      for (const line of input.items) {
+        await tx.insert(orderItems).values({
+          id: randomUUID(),
+          orderId: id,
+          productId: line.kind === "product" ? line.id : null,
+          name: line.name,
+          qty: line.qty,
+          unitPrice: String(line.price),
+          lineTotal: String(line.price * line.qty),
+        });
+      }
 
-    if (input.prescriptionId) {
-      await tx
-        .update(prescriptions)
-        .set({ status: "reviewing" })
-        .where(eq(prescriptions.id, input.prescriptionId));
-    }
-
-    for (const line of input.items) {
-      await tx.insert(orderItems).values({
+      await tx.insert(orderEvents).values({
         id: randomUUID(),
         orderId: id,
-        productId: line.kind === "product" ? line.id : null,
-        name: line.name,
-        qty: line.qty,
-        unitPrice: String(line.price),
-        lineTotal: String(line.price * line.qty),
+        status: "confirmed",
+        note: "অর্ডার গ্রহণ করা হয়েছে",
       });
-    }
-
-    await tx.insert(orderEvents).values({
-      id: randomUUID(),
-      orderId: id,
-      status: "confirmed",
-      note: "অর্ডার গ্রহণ করা হয়েছে",
     });
-  });
 
-  return { order_no: no, order_id: id, total: finalTotal, public_token: publicToken };
+    return {
+      success: true,
+      order_no: no,
+      order_id: id,
+      total: finalTotal,
+      public_token: publicToken,
+    };
+  } catch (err: unknown) {
+    if (stockError) {
+      return {
+        success: false,
+        error: "OUT_OF_STOCK",
+        productName: (stockError as { productName: string }).productName,
+        stockLeft: (stockError as { stockLeft: number }).stockLeft,
+      };
+    }
+    const msg = err instanceof Error ? err.message : "ORDER_CREATION_FAILED";
+    console.error("placeOrder transaction error:", err);
+    return { success: false, error: msg };
+  }
 }
 
 export async function listMyOrders() {

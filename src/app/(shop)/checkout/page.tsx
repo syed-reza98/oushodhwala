@@ -113,7 +113,7 @@ export default function CheckoutPage() {
         await new Promise((r) => setTimeout(r, 400));
         ref = payRef.trim() || `${method.toUpperCase()}${Math.floor(1e9 + Math.random() * 8e9)}`;
       }
-      const data = await placeOrder({
+      const res = await placeOrder({
         items: cart.map((l) => ({
           id: l.id,
           kind: l.kind,
@@ -132,26 +132,35 @@ export default function CheckoutPage() {
         usePoints,
         prescriptionId: attachedPrescriptionId || undefined,
       });
+
+      if (!res.success) {
+        if (res.error === "OUT_OF_STOCK") {
+          toast.error(
+            t(
+              `${res.productName || "পণ্য"} এর পর্যাপ্ত স্টক নেই (বাকি ${res.stockLeft ?? 0} টি)`,
+              `${res.productName || "Product"} is out of stock (${res.stockLeft ?? 0} left)`
+            )
+          );
+          void qc.invalidateQueries({ queryKey: catalogQueryKey });
+        } else if (res.error === "AUTH_REQUIRED") {
+          toast.error(t("অর্ডার করতে লগইন করুন", "Please log in to place an order"));
+          router.push("/auth");
+        } else {
+          toast.error(res.error || t("অর্ডার সম্পন্ন হয়নি", "Order could not be placed"));
+        }
+        return;
+      }
+
       clear();
       setCouponCode(null);
       setAttachedPrescriptionId(null);
       void qc.invalidateQueries({ queryKey: catalogQueryKey });
       void qc.invalidateQueries({ queryKey: ["my-orders"] });
       void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
-      setPlaced(data.order_no);
+      setPlaced(res.order_no);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : t("অর্ডার সম্পন্ন হয়নি", "Order could not be placed");
-      if (msg.startsWith("OUT_OF_STOCK")) {
-        const [, name, left] = msg.split(":");
-        toast.error(
-          t(`${name} এর পর্যাপ্ত স্টক নেই (বাকি ${left} টি)`, `${name} does not have enough stock (${left} left)`),
-        );
-        void qc.invalidateQueries({ queryKey: catalogQueryKey });
-      } else if (msg.includes("AUTH_REQUIRED")) {
-        toast.error(t("অর্ডার করতে লগইন করুন", "Please log in to place an order"));
-      } else {
-        toast.error(msg);
-      }
+      console.error("Order submit exception:", e);
+      toast.error(t("অর্ডার সম্পন্ন হয়নি, আবার চেষ্টা করুন", "Could not complete order, please try again"));
     } finally {
       setBusy(false);
     }
