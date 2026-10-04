@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Upload, Camera, FileText, ShieldCheck, Clock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Upload, Camera, FileText, ShieldCheck, Clock, FlaskConical, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
-import { createPrescription } from "@/server/actions/prescriptions";
+import { createPrescription, listMyPrescriptions } from "@/server/actions/prescriptions";
 
 const MAX_FILES = 5;
 const MAX_MB = 20;
@@ -26,6 +27,12 @@ export default function PrescriptionPage() {
   const [picked, setPicked] = useState<Picked[]>([]);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(0);
+
+  const { data: myPrescriptions, isLoading: loadingList } = useQuery({
+    queryKey: ["my-prescriptions-list"],
+    enabled: !!user,
+    queryFn: () => listMyPrescriptions(),
+  });
 
   const onPick = (files: FileList | null) => {
     if (!files?.length) return;
@@ -230,6 +237,112 @@ export default function PrescriptionPage() {
             {t("লগইন করুন", "Log in")}
           </Link>
         </p>
+      )}
+
+      {/* Uploaded Prescriptions Section */}
+      {user && (
+        <div className="mt-8 border-t border-border pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                <FlaskConical className="h-4 w-4 text-primary" />
+                {t("আপনার সংরক্ষিত প্রেসক্রিপশনসমূহ", "Your Uploaded Prescriptions")}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "পূর্ববর্তী প্রেসক্রিপশনের তালিকা, এআই স্ক্যানের ফলাফল ও অর্ডারের অবস্থা",
+                  "View previously submitted prescriptions, AI extraction results, and order status"
+                )}
+              </p>
+            </div>
+            {myPrescriptions && (
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                {t.n(myPrescriptions.length)} {t("টি", "records")}
+              </span>
+            )}
+          </div>
+
+          {loadingList ? (
+            <p className="text-xs text-muted-foreground text-center py-6">{t("লোড হচ্ছে...", "Loading...")}</p>
+          ) : myPrescriptions && myPrescriptions.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {myPrescriptions.map((rx) => {
+                const statusBadge: Record<string, { cls: string; labelBn: string; labelEn: string }> = {
+                  pending: { cls: "bg-amber-500/10 text-amber-600 border-amber-500/30", labelBn: "অপেক্ষমান", labelEn: "Pending" },
+                  reviewing: { cls: "bg-blue-500/10 text-blue-600 border-blue-500/30", labelBn: "যাচাই চলছে", labelEn: "Reviewing" },
+                  approved: { cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30", labelBn: "অনুমোদিত", labelEn: "Approved" },
+                  fulfilled: { cls: "bg-purple-500/10 text-purple-600 border-purple-500/30", labelBn: "অর্ডার সম্পন্ন", labelEn: "Fulfilled" },
+                };
+                const badge = statusBadge[rx.status] || { cls: "bg-secondary text-foreground", labelBn: rx.status, labelEn: rx.status };
+                const firstImg = rx.filePaths.find((p) => p.match(/\.(jpe?g|png|webp)$/i));
+                const imgUrl = firstImg ? `/uploads/${firstImg.replace(/^\/+/, "")}` : null;
+
+                return (
+                  <div
+                    key={rx.id}
+                    className="flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition hover:border-primary/50 shadow-xs"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2">
+                        <span className="font-mono text-xs font-bold text-foreground">
+                          #{rx.id.slice(0, 8)}...
+                        </span>
+                        <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
+                          {t(badge.labelBn, badge.labelEn)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex items-start gap-3">
+                        {imgUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={imgUrl}
+                            alt="Prescription thumbnail"
+                            className="h-16 w-16 rounded-lg object-cover border border-border shrink-0 bg-secondary"
+                          />
+                        ) : (
+                          <div className="h-16 w-16 rounded-lg border border-border bg-secondary flex items-center justify-center shrink-0">
+                            <FileText className="h-6 w-6 text-primary" />
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-xs text-foreground font-medium truncate">
+                            {rx.note || t("প্রেসক্রিপশন আপলোড", "Prescription Upload")}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {rx.filePaths.length} {t("টি ফাইল সংযুক্ত", "file(s) attached")}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/80">
+                            {new Date(rx.createdAt).toLocaleDateString("bn-BD", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Link
+                      href={`/prescription/${rx.id}`}
+                      className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-2 text-xs font-bold text-primary hover:bg-primary hover:text-primary-foreground transition"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {t("বিস্তারিত ও ঔষধের তালিকা দেখুন", "View Details & Order")}
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+              {t("কোনো সংরক্ষিত প্রেসক্রিপশন পাওয়া যায়নি।", "No saved prescriptions found.")}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

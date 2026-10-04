@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
 import { prescriptions } from "@/server/db/schema";
@@ -40,6 +40,16 @@ export async function createPrescription(input: {
   return { id, status: "pending" as const };
 }
 
+export async function countMyPrescriptions(): Promise<number> {
+  const session = await auth();
+  if (!session?.user?.id) return 0;
+  const [res] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(prescriptions)
+    .where(eq(prescriptions.userId, session.user.id));
+  return Number(res?.count) || 0;
+}
+
 export async function listMyPrescriptions() {
   const session = await auth();
   if (!session?.user?.id) return [];
@@ -49,14 +59,29 @@ export async function listMyPrescriptions() {
     .where(eq(prescriptions.userId, session.user.id))
     .orderBy(desc(prescriptions.createdAt))
     .limit(50);
-  return rows.map((r) => ({
-    id: r.id,
-    status: r.status,
-    phone: r.phone,
-    note: r.note,
-    filePaths: r.filePaths ?? [],
-    createdAt: r.createdAt,
-  }));
+  return rows.map((r) => {
+    const raw = r.filePaths;
+    const filePaths: string[] = Array.isArray(raw)
+      ? raw
+      : typeof raw === "string"
+        ? (() => {
+            try {
+              const p = JSON.parse(raw);
+              return Array.isArray(p) ? p : [raw];
+            } catch {
+              return raw ? [raw] : [];
+            }
+          })()
+        : [];
+    return {
+      id: r.id,
+      status: r.status,
+      phone: r.phone,
+      note: r.note,
+      filePaths,
+      createdAt: r.createdAt,
+    };
+  });
 }
 
 export async function getPrescriptionById(id: string) {

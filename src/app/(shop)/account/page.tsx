@@ -20,11 +20,12 @@ import {
 import { useStore } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { countMyOrders } from "@/server/actions/orders";
+import { countMyPrescriptions, listMyPrescriptions } from "@/server/actions/prescriptions";
 import { useT } from "@/lib/i18n";
 
 export default function AccountPage() {
   const t = useT();
-  const { addresses, addAddress, removeAddress, activeAddress, setActiveAddress, prescriptions, wishlist } =
+  const { addresses, addAddress, removeAddress, activeAddress, setActiveAddress, wishlist } =
     useStore();
   const { user, profile, isAdmin, loading, signOut } = useAuth();
   const router = useRouter();
@@ -35,6 +36,18 @@ export default function AccountPage() {
     queryKey: ["my-order-count"],
     enabled: !!user,
     queryFn: () => countMyOrders(),
+  });
+
+  const { data: rxCount } = useQuery({
+    queryKey: ["my-prescription-count"],
+    enabled: !!user,
+    queryFn: () => countMyPrescriptions(),
+  });
+
+  const { data: myPrescriptions } = useQuery({
+    queryKey: ["my-prescriptions-list"],
+    enabled: !!user,
+    queryFn: () => listMyPrescriptions(),
   });
 
   if (loading) {
@@ -90,7 +103,7 @@ export default function AccountPage() {
         <Stat
           icon={FlaskConical}
           label={t("প্রেসক্রিপশন", "Prescriptions")}
-          v={t.n(prescriptions.length)}
+          v={t.n(rxCount ?? 0)}
           href="/prescription"
         />
         <Stat icon={CalendarDays} label={t("অ্যাপয়েন্টমেন্ট", "Appointments")} v={t.n(0)} href="/appointments" />
@@ -104,6 +117,81 @@ export default function AccountPage() {
           <ShieldCheck className="h-4 w-4" /> {t("অ্যাডমিন ড্যাশবোর্ড", "Admin dashboard")}
         </Link>
       )}
+
+      {/* My Prescriptions Section */}
+      <div className="mt-5">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-bold flex items-center gap-1.5">
+            <FlaskConical className="h-4 w-4 text-primary" />
+            {t("আমার প্রেসক্রিপশনসমূহ", "My Prescriptions")}
+          </h2>
+          <Link
+            href="/prescription"
+            className="text-xs font-semibold text-primary hover:underline"
+          >
+            + {t("নতুন আপলোড করুন", "Upload new")}
+          </Link>
+        </div>
+
+        {myPrescriptions && myPrescriptions.length > 0 ? (
+          <div className="space-y-2">
+            {myPrescriptions.slice(0, 3).map((p) => {
+              const statusBadge: Record<string, { cls: string; labelBn: string; labelEn: string }> = {
+                pending: { cls: "bg-amber-500/10 text-amber-600 border-amber-500/30", labelBn: "অপেক্ষমান", labelEn: "Pending" },
+                reviewing: { cls: "bg-blue-500/10 text-blue-600 border-blue-500/30", labelBn: "যাচাই চলছে", labelEn: "Reviewing" },
+                approved: { cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30", labelBn: "অনুমোদিত", labelEn: "Approved" },
+                fulfilled: { cls: "bg-purple-500/10 text-purple-600 border-purple-500/30", labelBn: "অর্ডার সম্পন্ন", labelEn: "Fulfilled" },
+              };
+              const badge = statusBadge[p.status] || { cls: "bg-secondary text-foreground", labelBn: p.status, labelEn: p.status };
+
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 transition hover:border-primary/40"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-foreground">
+                        #{p.id.slice(0, 8)}
+                      </span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${badge.cls}`}>
+                        {t(badge.labelBn, badge.labelEn)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      {p.note || t("সংযুক্ত ফাইল:", "Attached files:")} {p.filePaths.length} {t("টি", "files")}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+                      {new Date(p.createdAt).toLocaleDateString("bn-BD", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+
+                  <Link
+                    href={`/prescription/${p.id}`}
+                    className="shrink-0 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition"
+                  >
+                    {t("দেখুন ও অর্ডার", "View & Order")}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-card p-5 text-center text-xs text-muted-foreground">
+            <p>{t("এখনও কোনো প্রেসক্রিপশন আপলোড করা হয়নি।", "No prescriptions uploaded yet.")}</p>
+            <Link
+              href="/prescription"
+              className="mt-2 inline-block rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+            >
+              {t("প্রেসক্রিপশন আপলোড করুন", "Upload prescription")}
+            </Link>
+          </div>
+        )}
+      </div>
 
       <h2 className="mt-5 text-sm font-bold">{t("সংরক্ষিত ঠিকানা", "Saved addresses")}</h2>
       <div className="mt-2 space-y-2">
