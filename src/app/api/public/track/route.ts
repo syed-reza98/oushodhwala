@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { asc, eq } from "drizzle-orm";
+import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
 import { deliveries, deliveryEvents, orderEvents, orderItems, orders, riders } from "@/server/db/schema";
 
 export const dynamic = "force-dynamic";
 
-/** Public order status by order number (no PII beyond status + totals). */
+/** Public order status by order number with privacy-preserving masking. */
 export async function GET(req: NextRequest) {
   const no = req.nextUrl.searchParams.get("no")?.trim();
+  const token = req.nextUrl.searchParams.get("token")?.trim();
+
   if (!no) {
     return NextResponse.json({ error: "order number required" }, { status: 400 });
   }
@@ -16,6 +19,14 @@ export async function GET(req: NextRequest) {
   if (!order) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  const session = await auth();
+  const isOwner = Boolean(session?.user?.id && order.userId && session.user.id === order.userId);
+  const isStaff = Boolean(
+    session?.user?.roles?.some((r: string) => ["super_admin", "admin", "rider", "support_agent"].includes(r)),
+  );
+  const hasValidToken = Boolean(token && order.publicToken && token === order.publicToken);
+  const isAuthorized = isOwner || isStaff || hasValidToken;
 
   const [items, events, [delivery]] = await Promise.all([
     db
@@ -63,7 +74,11 @@ export async function GET(req: NextRequest) {
     if (delivery.riderId) {
       const [r] = await db.select().from(riders).where(eq(riders.id, delivery.riderId)).limit(1);
       if (r) {
-        riderInfo = { name: r.name, phone: r.phone, vehicle: r.vehicle };
+        riderInfo = {
+          name: r.name,
+          phone: isAuthorized ? r.phone : "",
+          vehicle: r.vehicle,
+        };
       }
     }
 
@@ -81,6 +96,8 @@ export async function GET(req: NextRequest) {
     }));
   }
 
+  const totalItemsCount = items.reduce((s, it) => s + it.qty, 0);
+
   return NextResponse.json({
     orderNo: order.orderNo,
     status: order.status,
@@ -88,11 +105,20 @@ export async function GET(req: NextRequest) {
     paymentMethod: order.paymentMethod,
     total: Number(order.total),
     createdAt: order.createdAt,
-    items: items.map((i) => ({
-      name: i.name,
-      qty: i.qty,
-      lineTotal: Number(i.lineTotal),
-    })),
+    isAuthorized,
+    items: isAuthorized
+      ? items.map((i) => ({
+          name: i.name,
+          qty: i.qty,
+          lineTotal: Number(i.lineTotal),
+        }))
+      : [
+          {
+            name: `ঔষধ ও পণ্য (${totalItemsCount} টি আইটেম - বিবরণ দেখতে লগইন করুন)`,
+            qty: totalItemsCount,
+            lineTotal: Number(order.subtotal),
+          },
+        ],
     events: events.map((e) => ({
       id: e.id,
       status: e.status,
@@ -108,8 +134,8 @@ export async function GET(req: NextRequest) {
           lastSeenAt: delivery.lastSeenAt,
           rider: riderInfo,
           events: devEvents,
-          otp,
-          pod: podInfo,
+          otp: isAuthorized ? otp : null,
+          pod: isAuthorized ? podInfo : null,
         }
       : null,
   });

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, desc, eq, like, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { genericInfo, products } from "@/server/db/schema";
 
@@ -101,6 +101,15 @@ export async function getProductById(id: string) {
     .where(eq(products.id, id))
     .limit(1);
   return row ?? null;
+}
+
+export async function getProductsByIds(ids: string[]) {
+  const clean = Array.from(new Set(ids.map((s) => String(s).trim()))).filter(Boolean);
+  if (!clean.length) return [];
+  return db
+    .select()
+    .from(products)
+    .where(and(eq(products.active, true), inArray(products.id, clean)));
 }
 
 /** Full product page payload: row + related + variants + generic_info. */

@@ -1,9 +1,18 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { products, type Product } from "@/data/catalog";
+import type { Product } from "@/data/catalog";
 
-export type CartLine = { id: string; qty: number; kind: "product" | "lab"; name: string; price: number };
+export type CartLine = {
+  id: string;
+  qty: number;
+  kind: "product" | "lab";
+  name: string;
+  price: number;
+  mrp?: number;
+  imageUrl?: string;
+  en?: string;
+};
 
 export type Order = {
   id: string;
@@ -133,8 +142,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const patch = (u: Partial<Persisted>) => setState((s) => ({ ...s, ...u }));
     const subtotal = state.cart.reduce((t, l) => t + l.price * l.qty, 0);
     const mrpTotal = state.cart.reduce((t, l) => {
-      const pr = products.find((x) => x.id === l.id);
-      return t + (pr ? pr.mrp : l.price) * l.qty;
+      const lineMrp = typeof l.mrp === "number" && l.mrp > 0 ? l.mrp : l.price;
+      return t + lineMrp * l.qty;
     }, 0);
     return {
       cart: state.cart,
@@ -229,9 +238,20 @@ export function useStore() {
   return c;
 }
 
-export const toLine = (pr: Product): Omit<CartLine, "qty"> => ({
+export const toLine = (pr: {
+  id: string;
+  name: string;
+  price: number;
+  mrp?: number;
+  imageUrl?: string;
+  image?: string;
+  en?: string;
+}): Omit<CartLine, "qty"> => ({
   id: pr.id,
   kind: "product",
   name: pr.name,
+  en: pr.en,
   price: pr.price,
+  mrp: pr.mrp ?? pr.price,
+  imageUrl: pr.imageUrl || pr.image || "",
 });

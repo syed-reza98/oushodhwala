@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 const timestamps = {
   createdAt: datetime("created_at", { mode: "string", fsp: 3 })
@@ -46,7 +46,7 @@ export const users = mysqlTable(
     image: varchar("image", { length: 512 }),
     ...timestamps,
   },
-  (t) => [index("users_email_idx").on(t.email)],
+  (t) => [uniqueIndex("users_email_unique").on(t.email)],
 );
 
 export const profiles = mysqlTable("profiles", {
@@ -203,7 +203,7 @@ export const orders = mysqlTable(
   (t) => [
     index("orders_user_idx").on(t.userId),
     index("orders_status_idx").on(t.status),
-    index("orders_order_no_idx").on(t.orderNo),
+    uniqueIndex("orders_order_no_unique").on(t.orderNo),
     index("orders_public_token_idx").on(t.publicToken),
   ],
 );
@@ -228,7 +228,9 @@ export const orderEvents = mysqlTable(
   "order_events",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    orderId: varchar("order_id", { length: 36 }).notNull(),
+    orderId: varchar("order_id", { length: 36 })
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
     status: varchar("status", { length: 64 }).notNull(),
     note: text("note").notNull().default(""),
     createdAt: datetime("created_at", { mode: "string", fsp: 3 })
@@ -1535,3 +1537,56 @@ export const rxRetention = mysqlTable("rx_retention", {
     .notNull()
     .default(sql`CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3)`),
 });
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  profile: one(profiles, {
+    fields: [users.id],
+    references: [profiles.id],
+  }),
+  roles: many(userRoles),
+  orders: many(orders),
+  prescriptions: many(prescriptions),
+  appointments: many(appointments),
+}));
+
+export const profilesRelations = relations(profiles, ({ one }) => ({
+  user: one(users, {
+    fields: [profiles.id],
+    references: [users.id],
+  }),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [orders.userId],
+    references: [users.id],
+  }),
+  items: many(orderItems),
+  events: many(orderEvents),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+  product: one(products, {
+    fields: [orderItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const orderEventsRelations = relations(orderEvents, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderEvents.orderId],
+    references: [orders.id],
+  }),
+}));
+
+export const prescriptionsRelations = relations(prescriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [prescriptions.userId],
+    references: [users.id],
+  }),
+}));
+

@@ -117,15 +117,17 @@ export function PrescriptionMatchedMeds({
         kind: "product",
         name: prod.name,
         price: prod.price,
+        mrp: prod.mrp ?? prod.price,
+        imageUrl: (prod as { image?: string }).image || "",
       },
-      qty
+      qty,
     );
     setAttachedPrescriptionId(prescriptionId);
     toast.success(
       t(
         `'${prod.name}' (${t.n(qty)} টি) কার্টে যোগ হয়েছে!`,
-        `Added '${prod.name}' (${qty}) to cart!`
-      )
+        `Added '${prod.name}' (${qty}) to cart!`,
+      ),
     );
   };
 
@@ -133,7 +135,14 @@ export function PrescriptionMatchedMeds({
     setOrdering(true);
     try {
       const linesToAdd: Array<{
-        line: { id: string; kind: "product"; name: string; price: number };
+        line: {
+          id: string;
+          kind: "product";
+          name: string;
+          price: number;
+          mrp?: number;
+          imageUrl?: string;
+        };
         qty: number;
       }> = [];
 
@@ -147,6 +156,8 @@ export function PrescriptionMatchedMeds({
               kind: "product",
               name: prod.name,
               price: prod.price,
+              mrp: prod.mrp ?? prod.price,
+              imageUrl: (prod as { image?: string }).image || "",
             },
             qty,
           });
@@ -231,6 +242,10 @@ export function PrescriptionMatchedMeds({
         </div>
 
         <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-700 border border-blue-500/20">
+            <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+            {t("ডিজিডিএ 'এ' গ্রেড ফার্মাসিস্ট যাচাইকৃত", "DGDA Grade-A Pharmacist Verified")}
+          </span>
           <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-600 border border-emerald-500/20">
             {t.n(matchedCount)}/{t.n(matches.length)} {t("টি প্রস্তুত", "Ready")}
           </span>

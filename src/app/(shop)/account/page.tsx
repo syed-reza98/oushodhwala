@@ -21,6 +21,7 @@ import { useStore } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { countMyOrders } from "@/server/actions/orders";
 import { countMyPrescriptions, listMyPrescriptions } from "@/server/actions/prescriptions";
+import { listMyAppointments } from "@/server/actions/appointments";
 import { useT } from "@/lib/i18n";
 
 export default function AccountPage() {
@@ -48,6 +49,12 @@ export default function AccountPage() {
     queryKey: ["my-prescriptions-list"],
     enabled: !!user,
     queryFn: () => listMyPrescriptions(),
+  });
+
+  const { data: myAppointments } = useQuery({
+    queryKey: ["my-appointments-list"],
+    enabled: !!user,
+    queryFn: () => listMyAppointments(),
   });
 
   if (loading) {
@@ -106,7 +113,12 @@ export default function AccountPage() {
           v={t.n(rxCount ?? 0)}
           href="/prescription"
         />
-        <Stat icon={CalendarDays} label={t("অ্যাপয়েন্টমেন্ট", "Appointments")} v={t.n(0)} href="/appointments" />
+        <Stat
+          icon={CalendarDays}
+          label={t("অ্যাপয়েন্টমেন্ট", "Appointments")}
+          v={t.n(myAppointments?.length ?? 0)}
+          href="/appointments"
+        />
       </div>
 
       {isAdmin && (

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, like, ne, notLike, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { products } from "@/server/db/schema";
 import { requireStaff } from "@/server/services/authz";
@@ -41,27 +41,21 @@ export async function GET(req: NextRequest) {
   const kind = req.nextUrl.searchParams.get("kind") ?? "list";
 
   if (kind === "counts") {
-    const active = await db
+    const [counts] = await db
       .select({
-        id: products.id,
-        imageUrl: products.imageUrl,
+        total: sql<number>`count(*)`,
+        missing: sql<number>`sum(case when ${products.imageUrl} is null or trim(${products.imageUrl}) = '' then 1 else 0 end)`,
+        uploaded: sql<number>`sum(case when ${products.imageUrl} is not null and (${products.imageUrl} like '%/uploads/%' or ${products.imageUrl} like '%product-images%') then 1 else 0 end)`,
+        external: sql<number>`sum(case when ${products.imageUrl} is not null and trim(${products.imageUrl}) != '' and ${products.imageUrl} not like '%/uploads/%' and ${products.imageUrl} not like '%product-images%' then 1 else 0 end)`,
       })
       .from(products)
       .where(eq(products.active, true));
 
-    let missing = 0;
-    let uploaded = 0;
-    let external = 0;
-    for (const p of active) {
-      if (isMissing(p.imageUrl)) missing++;
-      else if (isUploaded(p.imageUrl)) uploaded++;
-      else external++;
-    }
     return NextResponse.json({
-      total: active.length,
-      missing,
-      uploaded,
-      external,
+      total: Number(counts?.total ?? 0),
+      missing: Number(counts?.missing ?? 0),
+      uploaded: Number(counts?.uploaded ?? 0),
+      external: Number(counts?.external ?? 0),
     });
   }
 
@@ -69,31 +63,69 @@ export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
   const page = Math.max(0, Number(req.nextUrl.searchParams.get("page") ?? 0) || 0);
 
-  const rows = await db
-    .select()
-    .from(products)
-    .where(eq(products.active, true))
-    .orderBy(asc(products.name));
+  const conditions = [eq(products.active, true)];
 
-  let filtered = rows.filter((p) => {
-    if (filter === "missing") return isMissing(p.imageUrl);
-    if (filter === "uploaded") return isUploaded(p.imageUrl);
-    if (filter === "external") return !isMissing(p.imageUrl) && !isUploaded(p.imageUrl);
-    return true;
-  });
-
-  if (q) {
-    const term = q.toLowerCase();
-    filtered = filtered.filter(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        (p.en ?? "").toLowerCase().includes(term) ||
-        p.id.toLowerCase().includes(term),
+  if (filter === "missing") {
+    conditions.push(or(isNull(products.imageUrl), eq(sql`trim(${products.imageUrl})`, ""))!);
+  } else if (filter === "uploaded") {
+    conditions.push(
+      and(
+        isNotNull(products.imageUrl),
+        or(like(products.imageUrl, "%/uploads/%"), like(products.imageUrl, "%product-images%")),
+      )!,
+    );
+  } else if (filter === "external") {
+    conditions.push(
+      and(
+        isNotNull(products.imageUrl),
+        ne(sql`trim(${products.imageUrl})`, ""),
+        notLike(products.imageUrl, "%/uploads/%"),
+        notLike(products.imageUrl, "%product-images%"),
+      )!,
     );
   }
 
-  const total = filtered.length;
-  const slice = filtered.slice(page * PAGE, page * PAGE + PAGE).map(mapRow);
+  if (q) {
+    const term = `%${q}%`;
+    conditions.push(
+      or(
+        like(products.name, term),
+        like(products.en, term),
+        like(products.id, term),
+      )!,
+    );
+  }
+
+  const whereClause = and(...conditions);
+
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(products)
+    .where(whereClause);
+
+  const total = Number(countResult?.count ?? 0);
+
+  const rows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      en: products.en,
+      imageUrl: products.imageUrl,
+      medicineImageUrl: products.medicineImageUrl,
+    })
+    .from(products)
+    .where(whereClause)
+    .orderBy(asc(products.name))
+    .limit(PAGE)
+    .offset(page * PAGE);
+
+  const slice = rows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    en: p.en ?? "",
+    imageUrl: p.imageUrl ?? "",
+    medicineImageUrl: p.medicineImageUrl ?? "",
+  }));
 
   return NextResponse.json({ items: slice, count: total, page, pageSize: PAGE });
 }

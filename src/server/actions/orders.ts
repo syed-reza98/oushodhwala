@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
 import { loyaltyAccounts, loyaltyTransactions, orderEvents, orderItems, orderReturns, orders, prescriptions, products } from "@/server/db/schema";
@@ -258,26 +258,42 @@ export async function listMyOrders() {
     .orderBy(desc(orders.createdAt))
     .limit(50);
 
-  const result = [];
-  for (const o of rows) {
-    const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
-    const events = await db
+  if (rows.length === 0) return [];
+  const orderIds = rows.map((r) => r.id);
+
+  const [allItems, allEvents] = await Promise.all([
+    db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)),
+    db
       .select()
       .from(orderEvents)
-      .where(eq(orderEvents.orderId, o.id))
-      .orderBy(desc(orderEvents.createdAt));
-    result.push({
-      ...o,
-      order_items: items,
-      order_events: events.map((e) => ({
-        id: e.id,
-        status: e.status,
-        note: e.note,
-        created_at: e.createdAt,
-      })),
-    });
+      .where(inArray(orderEvents.orderId, orderIds))
+      .orderBy(desc(orderEvents.createdAt)),
+  ]);
+
+  const itemsMap = new Map<string, typeof allItems>();
+  for (const it of allItems) {
+    const list = itemsMap.get(it.orderId) ?? [];
+    list.push(it);
+    itemsMap.set(it.orderId, list);
   }
-  return result;
+
+  const eventsMap = new Map<string, typeof allEvents>();
+  for (const ev of allEvents) {
+    const list = eventsMap.get(ev.orderId) ?? [];
+    list.push(ev);
+    eventsMap.set(ev.orderId, list);
+  }
+
+  return rows.map((o) => ({
+    ...o,
+    order_items: itemsMap.get(o.id) ?? [],
+    order_events: (eventsMap.get(o.id) ?? []).map((e) => ({
+      id: e.id,
+      status: e.status,
+      note: e.note,
+      created_at: e.createdAt,
+    })),
+  }));
 }
 
 export async function countMyOrders() {

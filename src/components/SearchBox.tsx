@@ -112,6 +112,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
         strength?: string;
         form?: string;
         medicineImage?: string;
+        rx?: boolean;
       }[];
     const list = (data?.rows ?? []).map((r) => ({
       id: String(r.id ?? ""),
@@ -125,6 +126,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
       emoji: String(r.emoji ?? "💊"),
       strength: String(r.strength ?? ""),
       form: String(r.form ?? ""),
+      rx: Boolean((r as { rx?: boolean }).rx),
     }));
     list.sort(
       (a, b) =>
@@ -351,9 +353,16 @@ export function SearchBox({ className = "" }: { className?: string }) {
                     </span>
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-bold text-navy">{pick(lang, r.name, r.en)}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-xs font-bold text-navy">{pick(lang, r.name, r.en)}</span>
+                        {r.rx && (
+                          <span className="shrink-0 rounded bg-primary-dark px-1 py-0.5 text-[8px] font-bold text-primary-foreground leading-none">
+                            Rx
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-[10px] text-muted-foreground">
-                        {[r.strength, r.form, r.brand].filter(Boolean).join(" · ")}
+                        {[r.generic ? `(${r.generic})` : null, r.strength, r.form, r.brand].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     <span className="shrink-0 text-xs font-extrabold text-primary">৳{bn(Number(r.price))}</span>

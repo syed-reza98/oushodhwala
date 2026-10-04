@@ -52,12 +52,26 @@ export default function CartPage() {
         <div className="space-y-2">
           {cart.map((l) => (
             <div key={l.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-              <span className="grid h-11 w-11 place-items-center rounded-lg bg-secondary text-lg">
-                {l.kind === "lab" ? "🧪" : "💊"}
+              <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-secondary text-lg">
+                {l.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.imageUrl} alt={l.name} className="h-full w-full object-cover" />
+                ) : l.kind === "lab" ? (
+                  "🧪"
+                ) : (
+                  "💊"
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{l.name}</p>
-                <p className="text-[11px] font-bold text-primary-dark">{t.money(l.price * l.qty)}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[11px] font-bold text-primary-dark">{t.money(l.price * l.qty)}</p>
+                  {l.mrp && l.mrp > l.price && (
+                    <span className="text-[10px] text-muted-foreground line-through">
+                      {t.money(l.mrp * l.qty)}
+                    </span>
+                  )}
+                </div>
                 {stockOf(l.id, l.kind) !== null && l.qty >= (stockOf(l.id, l.kind) as number) && (
                   <p className="text-[10px] font-semibold text-sale">
                     {t(
@@ -135,7 +149,7 @@ export default function CartPage() {
 
           <dl className="mt-3 space-y-1.5 text-xs">
             <Row k={t("সাবটোটাল", "Subtotal")} v={t.money(subtotal)} />
-            <Row k={t("MRP ছাড়", "MRP discount")} v={`− ${t.money(discount)}`} />
+            {discount > 0 && <Row k={t("MRP ছাড়", "MRP discount")} v={`− ${t.money(discount)}`} />}
             {couponCut > 0 && <Row k={t("কুপন ছাড়", "Coupon discount")} v={`− ${t.money(couponCut)}`} />}
             <Row
               k={t("ডেলিভারি চার্জ", "Delivery charge")}

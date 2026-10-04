@@ -75,8 +75,9 @@ def main():
     # 1. Upload App Bundle
     upload_file("oushodhwala-app-deploy.tar.gz", "med.yessbangla.top")
     
-    # 2. Upload Product Images Bundle
-    upload_file("product-images.tar.gz", "med.yessbangla.top/storage/uploads")
+    # 2. Upload Product Images Bundle if present
+    if os.path.exists("product-images.tar.gz"):
+        upload_file("product-images.tar.gz", "med.yessbangla.top/storage/uploads")
 
     # 3. Remote Extraction & Service Reload
     ssh_script = """
@@ -90,19 +91,22 @@ def main():
     tar -xzf oushodhwala-app-deploy.tar.gz
     cp .env.bak .env
     
-    echo "3. Unpacking 22,537 Enhanced Product Images..."
-    cd ~/med.yessbangla.top/storage/uploads
-    tar -xzf product-images.tar.gz
+    if [ -f ~/med.yessbangla.top/storage/uploads/product-images.tar.gz ]; then
+        echo "3. Unpacking Product Images..."
+        cd ~/med.yessbangla.top/storage/uploads
+        tar -xzf product-images.tar.gz
+        rm -f product-images.tar.gz
+    fi
     
     echo "4. Reloading Phusion Passenger..."
+    mkdir -p ~/med.yessbangla.top/tmp
     touch ~/med.yessbangla.top/tmp/restart.txt
     
     echo "5. Verifying deployed structure..."
     ls -ld ~/med.yessbangla.top/server.js
     ls -ld ~/med.yessbangla.top/storage/uploads/product-images/med-1/box/med-1.jpeg
-    ls -ld ~/med.yessbangla.top/storage/uploads/product-images/med-14830/box/med-14830.jpeg
     
-    echo " Deployment and image unpack complete!"
+    echo "Deployment complete!"
     """
     
     res = run_ssh(ssh_script)

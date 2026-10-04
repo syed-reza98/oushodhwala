@@ -70,7 +70,7 @@ async function callGemini(
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("GEMINI_API_KEY_NOT_CONFIGURED");
 
-  const preferredModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const candidateModels = Array.from(new Set([preferredModel, "gemini-2.5-flash", "gemini-flash-latest"]));
 
   let lastError: Error | null = null;

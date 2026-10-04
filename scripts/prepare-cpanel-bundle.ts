@@ -1,17 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 
-function copyFolderRecursive(src: string, dest: string) {
+function copyFolderRecursive(src: string, dest: string, skipFolder?: string) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
 
   for (const entry of entries) {
+    if (skipFolder && entry.name === skipFolder) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 
     if (entry.isDirectory()) {
-      copyFolderRecursive(srcPath, destPath);
+      copyFolderRecursive(srcPath, destPath, skipFolder);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
@@ -39,11 +40,12 @@ async function main() {
   console.log(`Copying .next/static to ${staticDest}...`);
   copyFolderRecursive(staticSrc, staticDest);
 
-  // 3. Copy storage/uploads into standalone/storage/uploads
+  // 3. Copy storage/uploads (excluding product-images which are deployed separately or already on server)
   const storageSrc = path.resolve(process.cwd(), "storage");
   const storageDest = path.join(standaloneRoot, "storage");
   console.log(`Copying storage assets to ${storageDest}...`);
-  copyFolderRecursive(storageSrc, storageDest);
+  copyFolderRecursive(storageSrc, storageDest, "product-images");
+  fs.mkdirSync(path.join(storageDest, "uploads", "product-images"), { recursive: true });
 
   // 4. Copy .htaccess template for cPanel Passenger
   const htaccessContent = `# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN

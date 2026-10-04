@@ -34,3 +34,5 @@ playwright-report/
 storage/uploads/**
 !storage/uploads/.gitkeep
 drizzle/meta
+*.tar.gz
+*.tsbuildinfo

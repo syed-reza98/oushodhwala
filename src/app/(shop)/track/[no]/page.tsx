@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import { Lock, ShieldCheck } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 type TrackPayload = {
@@ -12,6 +13,7 @@ type TrackPayload = {
   paymentMethod?: string | null;
   total: number;
   createdAt: string;
+  isAuthorized?: boolean;
   items: { name: string; qty: number; lineTotal: number }[];
   events?: { id: string; status: string; note: string; createdAt: string }[];
   delivery?: {
@@ -39,7 +41,9 @@ const STATUS_BN: Record<string, [string, string]> = {
 export default function TrackPage() {
   const t = useT();
   const params = useParams<{ no: string }>();
+  const searchParams = useSearchParams();
   const no = decodeURIComponent(params.no ?? "");
+  const token = searchParams.get("token") ?? "";
   const [data, setData] = useState<TrackPayload | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
@@ -50,7 +54,10 @@ export default function TrackPage() {
       setLoading(true);
       setErr("");
       try {
-        const res = await fetch(`/api/public/track?no=${encodeURIComponent(no)}`, { cache: "no-store" });
+        const queryUrl = token
+          ? `/api/public/track?no=${encodeURIComponent(no)}&token=${encodeURIComponent(token)}`
+          : `/api/public/track?no=${encodeURIComponent(no)}`;
+        const res = await fetch(queryUrl, { cache: "no-store" });
         if (res.status === 404) {
           if (!cancelled) setErr(t("অর্ডার পাওয়া যায়নি", "Order not found"));
           return;
@@ -67,7 +74,7 @@ export default function TrackPage() {
     return () => {
       cancelled = true;
     };
-  }, [no, t]);
+  }, [no, token, t]);
 
   const statusLabel = data
     ? t(STATUS_BN[data.status]?.[0] ?? data.status, STATUS_BN[data.status]?.[1] ?? data.status)
@@ -91,8 +98,24 @@ export default function TrackPage() {
               {t("মোট", "Total")}: ৳{Math.round(data.total).toLocaleString("en-US")} ·{" "}
               {data.paymentMethod ?? "—"} · {data.paymentStatus ?? "—"}
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{data.createdAt}</p>
           </div>
+
+          {!data.isAuthorized && (
+            <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+              <Lock className="h-4 w-4 shrink-0" />
+              <div className="flex-1">
+                <span>
+                  {t(
+                    "স্বাস্থ্য সুরক্ষার স্বার্থে ঔষধের বিস্তারিত তালিকা ও ডেলিভারি OTP গোপন রাখা হয়েছে।",
+                    "For privacy and security, specific medication names and Delivery OTP are protected.",
+                  )}
+                </span>{" "}
+                <Link href={`/auth?callbackUrl=/track/${encodeURIComponent(no)}`} className="font-bold underline">
+                  {t("লগইন করুন", "Log in")}
+                </Link>
+              </div>
+            </div>
+          )}
           <ul className="rounded-2xl border border-border bg-card divide-y divide-border">
             {data.items.map((it, i) => (
               <li key={`${it.name}-${i}`} className="flex justify-between px-4 py-2 text-xs">
