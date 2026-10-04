@@ -47,9 +47,9 @@ async function main() {
 
   // 4. Copy .htaccess template for cPanel Passenger
   const htaccessContent = `# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot "${standaloneRoot}"
+PassengerAppRoot "/home/yessban2/med.yessbangla.top"
 PassengerBaseURI "/"
-PassengerNodejs "/usr/local/bin/node"
+PassengerNodejs "/home/yessban2/nodevenv/med.yessbangla.top/24/bin/node"
 PassengerAppType node
 PassengerStartupFile server.js
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END

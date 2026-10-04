@@ -50,6 +50,7 @@ export const defaultPrefs: DeliveryPrefs = {
 type Store = {
   cart: CartLine[];
   add: (line: Omit<CartLine, "qty">, qty?: number) => void;
+  addMany: (lines: Array<{ line: Omit<CartLine, "qty">; qty: number }>) => void;
   setQty: (id: string, qty: number) => void;
   remove: (id: string) => void;
   clear: () => void;
@@ -67,6 +68,8 @@ type Store = {
   setActiveAddress: (id: string) => void;
   prescriptions: { id: string; name: string; date: string; status: string }[];
   addPrescription: (name: string) => void;
+  attachedPrescriptionId: string | null;
+  setAttachedPrescriptionId: (id: string | null) => void;
   user: { name: string; phone: string } | null;
   login: (name: string, phone: string) => void;
   logout: () => void;
@@ -87,6 +90,7 @@ type Persisted = {
   addresses: Address[];
   activeAddress: string;
   prescriptions: { id: string; name: string; date: string; status: string }[];
+  attachedPrescriptionId: string | null;
   user: { name: string; phone: string } | null;
   couponCode: string | null;
   prefs: DeliveryPrefs;
@@ -101,6 +105,7 @@ const empty: Persisted = {
   ],
   activeAddress: "a1",
   prescriptions: [],
+  attachedPrescriptionId: null,
   user: null,
   couponCode: null,
   prefs: defaultPrefs,
@@ -146,6 +151,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               : [...s.cart, { ...line, qty }],
           };
         }),
+      addMany: (lines) =>
+        setState((s) => {
+          let updated = [...s.cart];
+          for (const item of lines) {
+            const found = updated.find((l) => l.id === item.line.id);
+            if (found) {
+              updated = updated.map((l) =>
+                l.id === item.line.id ? { ...l, qty: l.qty + item.qty } : l
+              );
+            } else {
+              updated.push({ ...item.line, qty: item.qty });
+            }
+          }
+          return { ...s, cart: updated };
+        }),
       setQty: (id, qty) =>
         setState((s) => ({
           ...s,
@@ -188,6 +208,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...s.prescriptions,
           ],
         })),
+      attachedPrescriptionId: state.attachedPrescriptionId ?? null,
+      setAttachedPrescriptionId: (id: string | null) => patch({ attachedPrescriptionId: id }),
       user: state.user,
       login: (name, phone) => patch({ user: { name, phone } }),
       logout: () => patch({ user: null }),

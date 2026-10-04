@@ -108,7 +108,7 @@ export default function ProductClient({
   return (
     <div className={reading ? "mx-auto max-w-2xl pt-4" : "pt-4"}>
       <div className={`grid gap-4 sm:grid-cols-2 ${reading ? "hidden" : ""}`}>
-        <div className="relative overflow-hidden rounded-xl border border-border bg-secondary">
+        <div className="relative overflow-hidden rounded-xl border border-border/60 bg-white dark:bg-card shadow-xs">
           <ProductImage
             src={shots[Math.min(shot, Math.max(shots.length - 1, 0))]}
             alt={`${p.name} — ${shot === 1 ? "ঔষধের ছবি" : "বক্সের ছবি"}`}

@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
-import { loyaltyAccounts, loyaltyTransactions, orderEvents, orderItems, orderReturns, orders, products } from "@/server/db/schema";
+import { loyaltyAccounts, loyaltyTransactions, orderEvents, orderItems, orderReturns, orders, prescriptions, products } from "@/server/db/schema";
 
 export type PlaceOrderItem = {
   id: string;
@@ -25,6 +25,7 @@ export type PlaceOrderInput = {
   paymentMethod: string;
   paymentRef?: string;
   usePoints?: boolean;
+  prescriptionId?: string;
 };
 
 function orderNo() {
@@ -172,9 +173,17 @@ export async function placeOrder(input: PlaceOrderInput) {
         ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
         ...(pointCut > 0 ? { pointsRedeemed: pointCut } : {}),
         ...(earnedPoints > 0 ? { pointsEarned: earnedPoints } : {}),
+        ...(input.prescriptionId ? { prescriptionId: input.prescriptionId } : {}),
       },
       publicToken,
     });
+
+    if (input.prescriptionId) {
+      await tx
+        .update(prescriptions)
+        .set({ status: "reviewing" })
+        .where(eq(prescriptions.id, input.prescriptionId));
+    }
 
     for (const line of input.items) {
       await tx.insert(orderItems).values({

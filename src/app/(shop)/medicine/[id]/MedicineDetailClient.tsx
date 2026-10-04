@@ -20,12 +20,13 @@ export default function MedicineDetailClient({ p }: { p: ShopProduct }) {
       <div className="mt-3 rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-6 items-start">
           {p.image ? (
-            <div className="relative h-48 w-48 shrink-0 overflow-hidden rounded-xl border border-border bg-muted/20">
+            <div className="relative h-48 w-48 sm:h-52 sm:w-52 shrink-0 overflow-hidden rounded-2xl border border-border/60 bg-white dark:bg-card p-3 shadow-xs">
               <Image
                 src={p.image}
                 alt={p.en || p.name}
                 fill
                 className="object-contain p-2"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
                 unoptimized
               />
             </div>

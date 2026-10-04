@@ -30,6 +30,8 @@ export default function CheckoutPage() {
     clear,
     couponCode,
     setCouponCode,
+    attachedPrescriptionId,
+    setAttachedPrescriptionId,
   } = useStore();
   const { offers, products, settings } = useCatalog();
   const { user, profile } = useAuth();
@@ -128,9 +130,11 @@ export default function CheckoutPage() {
         paymentMethod: method,
         paymentRef: ref,
         usePoints,
+        prescriptionId: attachedPrescriptionId || undefined,
       });
       clear();
       setCouponCode(null);
+      setAttachedPrescriptionId(null);
       void qc.invalidateQueries({ queryKey: catalogQueryKey });
       void qc.invalidateQueries({ queryKey: ["my-orders"] });
       void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
@@ -331,6 +335,12 @@ export default function CheckoutPage() {
 
         <aside className="h-fit rounded-xl border border-border bg-card p-4">
           <p className="text-sm font-bold">{t("অর্ডার সারাংশ", "Order summary")}</p>
+          {attachedPrescriptionId && (
+            <div className="mt-2 mb-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-[11px] text-emerald-700 font-semibold flex items-center justify-between">
+              <span>📄 {t("প্রেসক্রিপশন সংযুক্ত", "Prescription attached")}</span>
+              <span className="font-mono text-[10px]">#{attachedPrescriptionId.slice(0, 8)}</span>
+            </div>
+          )}
           <ul className="mt-2 space-y-1 text-xs">
             {cart.map((l) => (
               <li key={l.id} className="flex justify-between gap-2">

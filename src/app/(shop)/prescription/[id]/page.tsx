@@ -21,6 +21,7 @@ import {
   runPrescriptionAiOcr,
 } from "@/server/actions/prescriptions";
 import { RxInteractions, type InteractionMed } from "@/components/RxInteractions";
+import { PrescriptionMatchedMeds } from "@/components/PrescriptionMatchedMeds";
 import type { RxExtractedData, RxExtractedItem } from "@/server/ai/gateway";
 
 export default function PrescriptionDetailPage() {
@@ -337,6 +338,14 @@ export default function PrescriptionDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Catalog Matching, Pricing & Direct Ordering Board */}
+          {itemsList.length > 0 && (
+            <PrescriptionMatchedMeds
+              prescriptionId={row.id}
+              items={itemsList}
+            />
+          )}
 
           {/* Drug-Drug Interaction Checker Component */}
           {medsForInteraction.length > 0 && (
