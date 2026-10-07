@@ -8,12 +8,14 @@ export const dynamic = "force-dynamic";
 const STATIC_PATHS = [
   "/",
   "/products",
+  "/medicines",
   "/categories",
   "/offers",
   "/lab-test",
   "/home-diagnostics",
   "/home-services",
   "/doctor-consultation",
+  "/doctors",
   "/prescription",
   "/help",
   "/contact",
@@ -57,15 +59,22 @@ export async function GET() {
   const lines = [
     ...STATIC_PATHS.map((p) => url(origin, p, p === "/" ? "1.0" : "0.7", "daily")),
     ...cats.map((c) => url(origin, `/category/${c.slug}`, "0.8")),
-    ...prods.map((r) =>
+    ...prods.flatMap((r) => [
       url(
         origin,
         `/product/${encodeURIComponent(r.id)}`,
-        "0.6",
+        "0.7",
         "weekly",
         r.updatedAt?.slice(0, 10),
       ),
-    ),
+      url(
+        origin,
+        `/medicine/${encodeURIComponent(r.id)}`,
+        "0.7",
+        "weekly",
+        r.updatedAt?.slice(0, 10),
+      ),
+    ]),
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

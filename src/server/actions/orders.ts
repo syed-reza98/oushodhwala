@@ -19,6 +19,11 @@ export type PlaceOrderInput = {
   customerName: string;
   phone: string;
   address: string;
+  area?: string;
+  thana?: string;
+  district?: string;
+  lat?: number;
+  lng?: number;
   slot: string;
   deliveryFee: number;
   discount: number;
@@ -26,6 +31,7 @@ export type PlaceOrderInput = {
   paymentRef?: string;
   usePoints?: boolean;
   prescriptionId?: string;
+  guestToken?: string;
 };
 
 export type PlaceOrderResult =
@@ -50,11 +56,13 @@ function orderNo() {
 
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
   const session = await auth();
-  if (!session?.user?.id) {
-    return { success: false, error: "AUTH_REQUIRED" };
-  }
+  const userId = session?.user?.id ?? null;
+
   if (!input.items.length) {
     return { success: false, error: "EMPTY_CART" };
+  }
+  if (!input.phone.trim() || !input.address.trim()) {
+    return { success: false, error: "MISSING_DELIVERY_DETAILS" };
   }
 
   const productLines = input.items.filter((i) => i.kind === "product");
@@ -97,13 +105,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         }
       }
 
-      // Check & redeem loyalty points if requested
+      // Check & redeem loyalty points if requested (authenticated users only)
       let pointCut = 0;
-      if (input.usePoints) {
+      if (userId && input.usePoints) {
         const [acc] = await tx
           .select()
           .from(loyaltyAccounts)
-          .where(eq(loyaltyAccounts.userId, session.user!.id))
+          .where(eq(loyaltyAccounts.userId, userId))
           .limit(1);
 
         if (acc && acc.balance > 0) {
@@ -118,11 +126,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
                 balance: nextBal,
                 tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
               })
-              .where(eq(loyaltyAccounts.userId, session.user!.id));
+              .where(eq(loyaltyAccounts.userId, userId));
 
             await tx.insert(loyaltyTransactions).values({
               id: randomUUID(),
-              userId: session.user!.id,
+              userId,
               points: -pointCut,
               kind: "spend",
               orderNo: no,
@@ -136,13 +144,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       const total = Math.max(0, subtotal - totalDiscount + input.deliveryFee);
       finalTotal = total;
 
-      // Award loyalty points for purchase (e.g. 1 point per ৳100 spent)
-      const earnedPoints = Math.floor(total / 100);
-      if (earnedPoints > 0) {
+      // Award loyalty points for purchase (authenticated users only)
+      const earnedPoints = userId ? Math.floor(total / 100) : 0;
+      if (userId && earnedPoints > 0) {
         const [acc] = await tx
           .select()
           .from(loyaltyAccounts)
-          .where(eq(loyaltyAccounts.userId, session.user!.id))
+          .where(eq(loyaltyAccounts.userId, userId))
           .limit(1);
 
         if (acc) {
@@ -154,10 +162,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
               balance: nextBal,
               tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
             })
-            .where(eq(loyaltyAccounts.userId, session.user!.id));
+            .where(eq(loyaltyAccounts.userId, userId));
         } else {
           await tx.insert(loyaltyAccounts).values({
-            userId: session.user!.id,
+            userId,
             pointsEarned: earnedPoints,
             pointsSpent: 0,
             balance: earnedPoints,
@@ -167,7 +175,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
         await tx.insert(loyaltyTransactions).values({
           id: randomUUID(),
-          userId: session.user!.id,
+          userId,
           points: earnedPoints,
           kind: "earn",
           orderNo: no,
@@ -178,23 +186,31 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       await tx.insert(orders).values({
         id,
         orderNo: no,
-        userId: session.user!.id,
+        userId: userId ?? undefined,
         status: "confirmed",
         paymentMethod: input.paymentMethod,
         paymentStatus: input.paymentMethod === "cod" ? "pending" : "paid",
+        paymentRef: input.paymentRef || undefined,
         subtotal: String(subtotal),
         discount: String(totalDiscount),
         deliveryFee: String(input.deliveryFee),
         total: String(total),
-        customerName: input.customerName,
+        customerName: input.customerName || "Customer",
         customerPhone: input.phone,
         deliveryAddress: input.address,
+        area: input.area || undefined,
+        thana: input.thana || undefined,
+        district: input.district || undefined,
+        lat: input.lat != null ? String(input.lat) : undefined,
+        lng: input.lng != null ? String(input.lng) : undefined,
+        slot: input.slot,
         notes: input.slot,
         meta: {
           ...(input.paymentRef ? { paymentRef: input.paymentRef } : {}),
           ...(pointCut > 0 ? { pointsRedeemed: pointCut } : {}),
           ...(earnedPoints > 0 ? { pointsEarned: earnedPoints } : {}),
           ...(input.prescriptionId ? { prescriptionId: input.prescriptionId } : {}),
+          ...(input.guestToken ? { guestToken: input.guestToken } : {}),
         },
         publicToken,
       });

@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ? {
         id: user.id,
         name: data?.user?.name ?? "",
-        phone: "",
+        phone: ((data?.user as { phone?: string })?.phone ?? "").trim(),
       }
     : null;
 

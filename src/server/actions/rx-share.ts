@@ -10,16 +10,27 @@ export async function createRxShare(input: {
   prescriptionId: string;
   expiresInHours?: number;
   scopes?: Record<string, boolean>;
+  guestToken?: string;
 }) {
   const session = await auth();
-  if (!session?.user?.id) throw new Error("AUTH_REQUIRED");
+  const userId = session?.user?.id;
+  const guestToken = input.guestToken?.trim();
 
   const [rx] = await db
     .select()
     .from(prescriptions)
     .where(eq(prescriptions.id, input.prescriptionId))
     .limit(1);
-  if (!rx || rx.userId !== session.user.id) throw new Error("NOT_FOUND");
+  if (!rx) throw new Error("NOT_FOUND");
+
+  const isOwner = userId && rx.userId === userId;
+  const isGuestMatch = guestToken && rx.guestToken === guestToken;
+  const roles = session?.user?.roles ?? [];
+  const isStaff = roles.some((r) =>
+    ["super_admin", "admin", "pharmacist", "support_agent"].includes(r),
+  );
+
+  if (!isOwner && !isGuestMatch && !isStaff) throw new Error("FORBIDDEN");
 
   const token = randomBytes(12).toString("hex");
   const hours = input.expiresInHours ?? 72;
@@ -31,13 +42,73 @@ export async function createRxShare(input: {
   await db.insert(prescriptionShares).values({
     id: randomUUID(),
     prescriptionId: rx.id,
-    userId: session.user.id,
+    userId: userId || "guest",
     token,
     scopes: input.scopes ?? { medicines: true, dosage: true, patient: false, advice: true },
     expiresAt: expires,
   });
 
   return { token, expiresAt: expires };
+}
+
+export async function listRxShares(prescriptionId: string, guestToken?: string) {
+  const session = await auth();
+  const userId = session?.user?.id;
+  const token = guestToken?.trim();
+
+  const [rx] = await db
+    .select()
+    .from(prescriptions)
+    .where(eq(prescriptions.id, prescriptionId))
+    .limit(1);
+  if (!rx) return [];
+
+  const isOwner = userId && rx.userId === userId;
+  const isGuestMatch = token && rx.guestToken === token;
+  const roles = session?.user?.roles ?? [];
+  const isStaff = roles.some((r) =>
+    ["super_admin", "admin", "pharmacist", "support_agent"].includes(r),
+  );
+
+  if (!isOwner && !isGuestMatch && !isStaff) return [];
+
+  return db
+    .select()
+    .from(prescriptionShares)
+    .where(eq(prescriptionShares.prescriptionId, prescriptionId));
+}
+
+export async function revokeRxShare(shareId: string, guestToken?: string) {
+  const session = await auth();
+  const [share] = await db
+    .select()
+    .from(prescriptionShares)
+    .where(eq(prescriptionShares.id, shareId))
+    .limit(1);
+  if (!share) throw new Error("NOT_FOUND");
+
+  const [rx] = await db
+    .select()
+    .from(prescriptions)
+    .where(eq(prescriptions.id, share.prescriptionId))
+    .limit(1);
+  if (!rx) throw new Error("NOT_FOUND");
+
+  const isOwner = session?.user?.id && rx.userId === session.user.id;
+  const isGuestMatch = guestToken && rx.guestToken === guestToken.trim();
+  const roles = session?.user?.roles ?? [];
+  const isStaff = roles.some((r) =>
+    ["super_admin", "admin", "pharmacist", "support_agent"].includes(r),
+  );
+
+  if (!isOwner && !isGuestMatch && !isStaff) throw new Error("FORBIDDEN");
+
+  await db
+    .update(prescriptionShares)
+    .set({ revoked: true })
+    .where(eq(prescriptionShares.id, shareId));
+
+  return { success: true };
 }
 
 export async function openRxShare(token: string) {

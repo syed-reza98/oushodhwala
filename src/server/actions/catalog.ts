@@ -3,6 +3,7 @@
 import { and, asc, desc, eq, inArray, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { genericInfo, products } from "@/server/db/schema";
+import { expandQuery } from "@/lib/bn-search";
 
 export async function getCatalog(limit = 48) {
   return db
@@ -41,16 +42,20 @@ export async function searchProducts(input: SearchProductsInput | string, limitA
 
   const filters = [eq(products.active, true)];
   if (q) {
-    const term = `%${q}%`;
-    filters.push(
-      or(
+    const expandedTerms = expandQuery(q);
+    const qFilters = expandedTerms.flatMap((termStr) => {
+      const term = `%${termStr}%`;
+      return [
         like(products.name, term),
         like(products.en, term),
         like(products.generic, term),
         like(products.brand, term),
         like(products.manufacturer, term),
-      )!,
-    );
+      ];
+    });
+    if (qFilters.length > 0) {
+      filters.push(or(...qFilters)!);
+    }
   }
   if (category) filters.push(eq(products.category, category));
   if (company) filters.push(eq(products.manufacturer, company));
@@ -117,10 +122,13 @@ export async function getProductPage(id: string) {
   const row = await getProductById(id);
   if (!row) return null;
 
-  const genericKey = (row.generic ?? "").trim().toLowerCase();
+  const genericStr = (row.generic ?? "").trim();
+  const genericKey = genericStr.toLowerCase();
   const category = row.category ?? "";
   const brand = row.brand ?? "";
-  const [related, variants, genericRows] = await Promise.all([
+  const manufacturer = row.manufacturer ?? "";
+
+  const [related, variants, genericRows, alternatives, manufacturerProducts] = await Promise.all([
     category
       ? db
           .select()
@@ -158,7 +166,43 @@ export async function getProductPage(id: string) {
           .limit(30)
       : Promise.resolve([]),
     genericKey
-      ? db.select().from(genericInfo).where(eq(genericInfo.key, genericKey)).limit(1)
+      ? db
+          .select()
+          .from(genericInfo)
+          .where(
+            or(
+              eq(genericInfo.key, genericKey),
+              like(genericInfo.name, `%${genericStr}%`),
+            )!,
+          )
+          .limit(1)
+      : Promise.resolve([]),
+    genericStr
+      ? db
+          .select()
+          .from(products)
+          .where(
+            and(
+              eq(products.active, true),
+              eq(products.generic, genericStr),
+              ne(products.id, row.id),
+            ),
+          )
+          .orderBy(asc(products.price))
+          .limit(10)
+      : Promise.resolve([]),
+    manufacturer
+      ? db
+          .select()
+          .from(products)
+          .where(
+            and(
+              eq(products.active, true),
+              eq(products.manufacturer, manufacturer),
+              ne(products.id, row.id),
+            ),
+          )
+          .limit(6)
       : Promise.resolve([]),
   ]);
 
@@ -166,6 +210,8 @@ export async function getProductPage(id: string) {
     row,
     related,
     variants,
+    alternatives,
+    manufacturerProducts,
     generic: genericRows[0]
       ? {
           indications: genericRows[0].indications,

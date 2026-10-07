@@ -484,44 +484,57 @@ export function PrescriptionMatchedMeds({
       </div>
 
       {/* Floating Action / Order All Summary Card */}
-      {matchedCount > 0 && (
-        <div className="mt-5 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center sm:text-left">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block">
-              {t("প্রেসক্রিপশন অর্ডার সামারি", "Prescription Order Summary")}
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-lg font-bold text-foreground">
-                {t("আনুমানিক মোট:", "Estimated Total:")}
-              </span>
-              <span className="text-2xl font-black text-emerald-600">
-                {t.money(totalOrderEstimate)}
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                `${t.n(matchedCount)} টি ঔষধ আপনার কার্টে যুক্ত হবে`,
-                `${matchedCount} prescribed medicines will be staged into your cart`
-              )}
-            </p>
-          </div>
+      {matchedCount > 0 && (() => {
+        const discount = Math.round(totalOrderEstimate * 0.10);
+        const finalTotal = Math.max(0, totalOrderEstimate - discount);
 
-          <button
-            type="button"
-            disabled={ordering}
-            onClick={handleOrderAll}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-bold text-white shadow-md hover:bg-emerald-700 active:scale-[0.98] transition disabled:opacity-50"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            <span>
-              {ordering
-                ? t("অর্ডার প্রসেস হচ্ছে...", "Processing order...")
-                : t("প্রেসক্রিপশনের সব ঔষধ অর্ডার করুন", "Order All Prescribed Medicines")}
-            </span>
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+        return (
+          <div className="mt-5 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 block">
+                  {t("প্রেসক্রিপশন অর্ডার সামারি", "Prescription Order Summary")}
+                </span>
+                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  {t("১০% প্রেসক্রিপশন ছাড়", "10% Rx Discount")}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-baseline gap-2 justify-center sm:justify-start">
+                <span className="text-sm text-muted-foreground line-through">
+                  {t.money(totalOrderEstimate)}
+                </span>
+                <span className="text-2xl font-black text-emerald-600">
+                  {t.money(finalTotal)}
+                </span>
+                <span className="text-xs font-semibold text-emerald-700">
+                  (-{t.money(discount)})
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  `${t.n(matchedCount)} টি ঔষধ আপনার কার্টে যুক্ত হবে (১০% ছাড় সহ)`,
+                  `${matchedCount} prescribed medicines staged to cart with 10% discount`
+                )}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={ordering}
+              onClick={handleOrderAll}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-bold text-white shadow-md hover:bg-emerald-700 active:scale-[0.98] transition disabled:opacity-50"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span>
+                {ordering
+                  ? t("অর্ডার প্রসেস হচ্ছে...", "Processing order...")
+                  : t("প্রেসক্রিপশনের সব ঔষধ অর্ডার করুন", "Order All Prescribed Medicines")}
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

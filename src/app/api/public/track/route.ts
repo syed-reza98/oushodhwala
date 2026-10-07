@@ -91,8 +91,10 @@ export async function GET(req: NextRequest) {
     devEvents = dEvs.map((e) => ({
       id: e.id,
       status: e.status,
-      note: e.note,
+      note: e.note ?? "",
       createdAt: e.createdAt,
+      lat: e.lat != null ? Number(e.lat) : null,
+      lng: e.lng != null ? Number(e.lng) : null,
     }));
   }
 
@@ -105,6 +107,8 @@ export async function GET(req: NextRequest) {
     paymentMethod: order.paymentMethod,
     total: Number(order.total),
     createdAt: order.createdAt,
+    customerName: isAuthorized ? order.customerName : null,
+    deliveryAddress: isAuthorized ? order.deliveryAddress : null,
     isAuthorized,
     items: isAuthorized
       ? items.map((i) => ({
@@ -132,6 +136,8 @@ export async function GET(req: NextRequest) {
           lastLat: delivery.lastLat != null ? Number(delivery.lastLat) : null,
           lastLng: delivery.lastLng != null ? Number(delivery.lastLng) : null,
           lastSeenAt: delivery.lastSeenAt,
+          destLat: order.lat != null ? Number(order.lat) : null,
+          destLng: order.lng != null ? Number(order.lng) : null,
           rider: riderInfo,
           events: devEvents,
           otp: isAuthorized ? otp : null,

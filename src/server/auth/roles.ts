@@ -15,6 +15,7 @@ export const STAFF_ROLES: AppRole[] = [
   "support_agent",
   "accountant",
   "pharmacist",
+  "rider",
 ];
 
 /** Mirrors src/lib/roles.ts ROLE_TABS — keep in sync for UI freeze */

@@ -88,16 +88,30 @@ export async function GET(req: NextRequest) {
 
   const riderMap = new Map(riderRows.map((r) => [r.id, r]));
   const deliveryIds = deliveryRows.map((d) => d.id);
-  const eventRows =
+  const orderIds = Array.from(new Set(deliveryRows.map((d) => d.orderId).filter(Boolean)));
+  const [eventRows, relatedOrders] = await Promise.all([
     deliveryIds.length > 0
-      ? await db
+      ? db
           .select()
           .from(deliveryEvents)
           .where(inArray(deliveryEvents.deliveryId, deliveryIds))
           .orderBy(desc(deliveryEvents.createdAt))
           .limit(400)
-      : [];
+      : Promise.resolve([]),
+    orderIds.length > 0
+      ? db
+          .select({
+            id: orders.id,
+            customerName: orders.customerName,
+            customerPhone: orders.customerPhone,
+            deliveryAddress: orders.deliveryAddress,
+          })
+          .from(orders)
+          .where(inArray(orders.id, orderIds))
+      : Promise.resolve([]),
+  ]);
 
+  const orderMap = new Map(relatedOrders.map((o) => [o.id, o]));
   const latestByDelivery = new Map<string, (typeof eventRows)[number]>();
   for (const e of eventRows) {
     if (!latestByDelivery.has(e.deliveryId)) latestByDelivery.set(e.deliveryId, e);
@@ -117,6 +131,7 @@ export async function GET(req: NextRequest) {
     })),
     deliveries: deliveryRows.map((d) => {
       const rider = d.riderId ? riderMap.get(d.riderId) : undefined;
+      const ord = d.orderId ? orderMap.get(d.orderId) : undefined;
       const last = latestByDelivery.get(d.id);
       const deliveryMeta = (d.note ? (d.note.startsWith("{") ? JSON.parse(d.note) : null) : null) as {
         otp?: string;
@@ -125,13 +140,16 @@ export async function GET(req: NextRequest) {
         podReceiverName?: string;
       } | null;
 
-      // Extract 4-digit OTP from delivery ID or orderNo if not in meta
-      const otp = deliveryMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
+      // Extract 4-digit OTP from formal column, metadata, or deterministic generator
+      const otp = d.otp || deliveryMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
 
       return {
         id: d.id,
         orderId: d.orderId,
         orderNo: d.orderNo,
+        customerName: ord?.customerName ?? null,
+        customerPhone: ord?.customerPhone ?? null,
+        deliveryAddress: ord?.deliveryAddress ?? null,
         status: d.status,
         etaMinutes: d.etaMinutes,
         riderId: d.riderId,
@@ -142,9 +160,9 @@ export async function GET(req: NextRequest) {
         lastSeenAt: d.lastSeenAt,
         assignedAt: d.assignedAt,
         otp,
-        podPhotoUrl: deliveryMeta?.podPhotoUrl ?? null,
-        podSignatureUrl: deliveryMeta?.podSignatureUrl ?? null,
-        podReceiverName: deliveryMeta?.podReceiverName ?? null,
+        podPhotoUrl: d.podPhotoUrl ?? deliveryMeta?.podPhotoUrl ?? null,
+        podSignatureUrl: d.podSignatureUrl ?? deliveryMeta?.podSignatureUrl ?? null,
+        podReceiverName: d.podReceiverName ?? deliveryMeta?.podReceiverName ?? null,
         lastEvent: last
           ? { status: last.status, note: last.note, createdAt: last.createdAt }
           : null,
@@ -280,7 +298,7 @@ export async function PATCH(req: NextRequest) {
       podReceiverName?: string;
     } | null;
 
-    const expectedOtp = existingMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
+    const expectedOtp = d.otp || existingMeta?.otp || (d.id ? String(parseInt(d.id.replace(/\D/g, ""), 10) % 9000 + 1000) : "1234");
 
     if (body.status === "delivered" && body.otp) {
       if (body.otp.trim() !== expectedOtp.trim()) {
@@ -296,12 +314,28 @@ export async function PATCH(req: NextRequest) {
       ...(body.podReceiverName ? { podReceiverName: body.podReceiverName } : {}),
     };
 
+    const now = new Date().toISOString().slice(0, 23).replace("T", " ");
+    const updatePayload: Record<string, unknown> = {
+      status: body.status,
+      note: JSON.stringify(updatedMeta),
+      ...(body.otp ? { otp: body.otp.trim() } : {}),
+      ...(body.podPhotoUrl ? { podPhotoUrl: body.podPhotoUrl } : {}),
+      ...(body.podSignatureUrl ? { podSignatureUrl: body.podSignatureUrl } : {}),
+      ...(body.podReceiverName ? { podReceiverName: body.podReceiverName } : {}),
+    };
+
+    if (body.status === "picked_up") {
+      updatePayload.pickedAt = now;
+    } else if (body.status === "delivered") {
+      updatePayload.deliveredAt = now;
+      if (body.podPhotoUrl || body.podSignatureUrl) {
+        updatePayload.podAt = now;
+      }
+    }
+
     await db
       .update(deliveries)
-      .set({
-        status: body.status,
-        note: JSON.stringify(updatedMeta),
-      })
+      .set(updatePayload)
       .where(eq(deliveries.id, body.deliveryId));
 
     await logEvent({
@@ -366,7 +400,8 @@ export async function PATCH(req: NextRequest) {
   const initialOtp = String(Math.floor(1000 + Math.random() * 9000));
   if (existing) {
     const existingMeta = (existing.note && existing.note.startsWith("{") ? JSON.parse(existing.note) : {}) as Record<string, unknown>;
-    if (!existingMeta.otp) existingMeta.otp = initialOtp;
+    const otpToUse = existing.otp || (existingMeta.otp as string) || initialOtp;
+    existingMeta.otp = otpToUse;
 
     await db
       .update(deliveries)
@@ -376,6 +411,7 @@ export async function PATCH(req: NextRequest) {
         etaMinutes: body.etaMinutes ?? 45,
         assignedAt: now,
         orderNo: order.orderNo,
+        otp: otpToUse,
         note: JSON.stringify(existingMeta),
       })
       .where(eq(deliveries.id, existing.id));
@@ -390,6 +426,7 @@ export async function PATCH(req: NextRequest) {
       status: "assigned",
       etaMinutes: body.etaMinutes ?? 45,
       assignedAt: now,
+      otp: initialOtp,
       note: JSON.stringify({ otp: initialOtp }),
     });
   }

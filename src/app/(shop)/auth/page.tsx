@@ -21,6 +21,7 @@ import { loginUser, registerUser, requestPasswordReset } from "@/server/actions/
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
 import { BrandLogo } from "@/components/BrandLogo";
+import { takeRedirect } from "@/components/RequireAuth";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -35,7 +36,10 @@ export default function AuthPage() {
   const [sent, setSent] = useState<"reset" | "confirm" | null>(null);
 
   useEffect(() => {
-    if (!loading && user) router.replace("/account");
+    if (!loading && user) {
+      const dest = takeRedirect();
+      router.replace(dest || "/account");
+    }
   }, [loading, user, router]);
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());

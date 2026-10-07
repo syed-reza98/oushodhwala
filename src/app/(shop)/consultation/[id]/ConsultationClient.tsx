@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 import {
   MessageCircle,
@@ -12,6 +12,16 @@ import {
   Star,
   Video,
   XCircle,
+  Mic,
+  Square,
+  Paperclip,
+  Volume2,
+  Loader2,
+  Printer,
+  Plus,
+  Trash2,
+  FileText,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useCatalog } from "@/lib/catalog-db";
@@ -92,8 +102,24 @@ export default function ConsultationClient() {
   const [reason, setReason] = useState("");
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaName, setMediaName] = useState("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  // Digital Prescription composer state
+  const [isEditingRx, setIsEditingRx] = useState(false);
+  const [rxDiagnosis, setRxDiagnosis] = useState("");
+  const [rxAdvice, setRxAdvice] = useState("");
+  const [rxFollowUp, setRxFollowUp] = useState("");
+  const [rxItems, setRxItems] = useState<{ name: string; dose: string; duration: string }[]>([
+    { name: "", dose: "", duration: "" },
+  ]);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const chatFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const roomQ = useQuery({
     queryKey: ["consultation-room", id],
@@ -123,6 +149,139 @@ export default function ConsultationClient() {
       void qc.invalidateQueries({ queryKey: ["my-appointments"] });
     },
   });
+
+  const initRxEditor = () => {
+    if (room?.rx) {
+      setRxDiagnosis(room.rx.diagnosis || "");
+      setRxAdvice(room.rx.advice || "");
+      setRxFollowUp(room.rx.followUp || "");
+      setRxItems(
+        room.rx.items && room.rx.items.length > 0
+          ? room.rx.items
+          : [{ name: "", dose: "", duration: "" }],
+      );
+    } else {
+      setRxDiagnosis("");
+      setRxAdvice("");
+      setRxFollowUp("");
+      setRxItems([{ name: "", dose: "", duration: "" }]);
+    }
+    setIsEditingRx(true);
+  };
+
+  const handleSaveRx = () => {
+    const validItems = rxItems.filter((i) => i.name.trim());
+    act.mutate(
+      {
+        action: "rx_save",
+        diagnosis: rxDiagnosis.trim(),
+        advice: rxAdvice.trim(),
+        items: validItems,
+        followUp: rxFollowUp.trim(),
+      },
+      {
+        onSuccess: () => {
+          toast.success(t("ডিজিটাল প্রেসক্রিপশন সফলভাবে সংরক্ষণ করা হয়েছে", "Prescription saved successfully"));
+          setIsEditingRx(false);
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  };
+
+  const uploadAndAttach = async (file: File, kind: "report" | "audio" = "report") => {
+    try {
+      setUploadingFile(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("bucket", "consultations");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "Upload failed");
+      }
+      const data = (await res.json()) as { url?: string; publicUrl?: string; path?: string };
+      const url = data.url || data.publicUrl || data.path || "";
+      await act.mutateAsync({
+        action: "media_add",
+        url,
+        name: file.name,
+        kind,
+      });
+      toast.success(
+        kind === "audio"
+          ? t("ভয়েস রেকর্ড পাঠানো হয়েছে", "Voice note recorded and uploaded")
+          : t("ফাইল সফলভাবে আপলোড হয়েছে", "File uploaded successfully"),
+      );
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || t("আপলোড ব্যর্থ হয়েছে", "Upload failed"));
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const uploadAndSendChatMessage = async (file: File) => {
+    try {
+      setUploadingFile(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("bucket", "consultations");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "Upload failed");
+      }
+      const data = (await res.json()) as { url?: string; publicUrl?: string; path?: string };
+      const url = data.url || data.publicUrl || data.path || "";
+      await act.mutateAsync({
+        action: "message",
+        text: file.name,
+        fileUrl: url,
+        fileName: file.name,
+      });
+      toast.success(t("ফাইল পাঠানো হয়েছে", "File sent"));
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      toast.error(err.message || t("আপলোড ব্যর্থ হয়েছে", "Upload failed"));
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const file = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: "audio/webm" });
+        await uploadAndAttach(file, "audio");
+      };
+      mr.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      timerRef.current = setInterval(() => {
+        setRecordingSeconds((s) => s + 1);
+      }, 1000);
+    } catch {
+      toast.error(t("মাইক্রোফোনের অনুমতি পাওয়া যায়নি", "Microphone access denied"));
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
 
   if (loading) {
     return (
@@ -325,33 +484,246 @@ export default function ConsultationClient() {
         </p>
       </section>
 
-      {room.rx && (
+      {(room.rx || isStaff) && (
         <section className="mt-4 rounded-2xl border border-border bg-card p-4 text-xs">
-          <h2 className="text-sm font-bold">{t("প্রেসক্রিপশন", "Prescription")}</h2>
-          {room.rx.diagnosis && (
-            <p className="mt-2">
-              <span className="font-semibold">{t("ডায়াগনোসিস", "Diagnosis")}:</span>{" "}
-              {room.rx.diagnosis}
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+            <div>
+              <h2 className="text-sm font-bold flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-primary" />
+                {t("ডিজিটাল প্রেসক্রিপশন", "Digital Prescription")}
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                {room.rx
+                  ? t("ডাক্তার কর্তৃক স্বাক্ষরিত ও অনুমোদিত প্রেসক্রিপশন", "Prescription signed & authorized by doctor")
+                  : t("এখনো কোনো প্রেসক্রিপশন ইস্যু করা হয়নি", "No prescription issued yet")}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {room.rx && (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition"
+                  title={t("প্রেসক্রিপশন প্রিন্ট করুন", "Print prescription")}
+                >
+                  <Printer className="h-3.5 w-3.5 text-primary" />
+                  {t("প্রিন্ট / ডাউনলোড", "Print / Download")}
+                </button>
+              )}
+              {isStaff && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEditingRx) {
+                      setIsEditingRx(false);
+                    } else {
+                      initRxEditor();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {isEditingRx
+                    ? t("বাতিল করুন", "Cancel")
+                    : room.rx
+                    ? t("সম্পাদন করুন", "Edit Rx")
+                    : t("প্রেসক্রিপশন লিখুন", "Write Rx")}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Rx Editing Form for Staff/Doctor */}
+          {isEditingRx && isStaff && (
+            <div className="mt-4 space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+              <h3 className="text-xs font-bold text-primary">
+                {t("প্রেসক্রিপশন রচনা করুন", "Compose Prescription")}
+              </h3>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                  {t("রোগ নির্ণয় / ডায়াগনোসিস", "Diagnosis")}
+                </label>
+                <input
+                  type="text"
+                  value={rxDiagnosis}
+                  onChange={(e) => setRxDiagnosis(e.target.value)}
+                  placeholder={t("যেমন: Acute Pharyngitis, Fever", "e.g., Acute Pharyngitis, Fever")}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-semibold text-muted-foreground">
+                    {t("ঔষধের তালিকা", "Medications List")}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRxItems([...rxItems, { name: "", dose: "", duration: "" }])
+                    }
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
+                  >
+                    <Plus className="h-3 w-3" /> {t("ঔষধ যোগ করুন", "Add Medicine")}
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {rxItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) => {
+                          const updated = [...rxItems];
+                          const cur = updated[idx];
+                          if (cur) cur.name = e.target.value;
+                          setRxItems(updated);
+                        }}
+                        placeholder={t("ঔষধের নাম (যেমন Napa 500mg)", "Medicine name")}
+                        className="flex-[2] rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+                      />
+                      <input
+                        type="text"
+                        value={item.dose}
+                        onChange={(e) => {
+                          const updated = [...rxItems];
+                          const cur = updated[idx];
+                          if (cur) cur.dose = e.target.value;
+                          setRxItems(updated);
+                        }}
+                        placeholder={t("ডোজ (যেমন 1+0+1 খাবারের পর)", "Dose")}
+                        className="flex-[1.5] rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+                      />
+                      <input
+                        type="text"
+                        value={item.duration}
+                        onChange={(e) => {
+                          const updated = [...rxItems];
+                          const cur = updated[idx];
+                          if (cur) cur.duration = e.target.value;
+                          setRxItems(updated);
+                        }}
+                        placeholder={t("মেয়াদ (যেমন ৫ দিন)", "Duration")}
+                        className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (rxItems.length > 1) {
+                            setRxItems(rxItems.filter((_, i) => i !== idx));
+                          } else {
+                            setRxItems([{ name: "", dose: "", duration: "" }]);
+                          }
+                        }}
+                        className="p-1.5 text-muted-foreground hover:text-destructive transition"
+                        title={t("মুছুন", "Delete")}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                  {t("পরামর্শ / উপদেশ", "Advice & Instructions")}
+                </label>
+                <textarea
+                  value={rxAdvice}
+                  onChange={(e) => setRxAdvice(e.target.value)}
+                  rows={2}
+                  placeholder={t("যেমন: প্রচুর পানি ও তরল খাবার গ্রহণ করুন। বিশ্রামে থাকুন।", "e.g., Drink plenty of water and fluids. Rest well.")}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                  {t("পরবর্তী সাক্ষাৎ / ফলো-আপ", "Follow-up")}
+                </label>
+                <input
+                  type="text"
+                  value={rxFollowUp}
+                  onChange={(e) => setRxFollowUp(e.target.value)}
+                  placeholder={t("যেমন: ৭ দিন পর যোগাযোগ করবেন", "e.g., Follow up after 7 days")}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditingRx(false)}
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-secondary"
+                >
+                  {t("বাতিল", "Cancel")}
+                </button>
+                <button
+                  type="button"
+                  disabled={act.isPending}
+                  onClick={handleSaveRx}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                >
+                  {act.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  {t("প্রেসক্রিপশন সংরক্ষণ করুন", "Save Prescription")}
+                </button>
+              </div>
+            </div>
           )}
-          {room.rx.advice && (
-            <p className="mt-1">
-              <span className="font-semibold">{t("পরামর্শ", "Advice")}:</span> {room.rx.advice}
-            </p>
-          )}
-          <ul className="mt-2 space-y-1">
-            {room.rx.items.map((it, i) => (
-              <li key={i} className="rounded-lg bg-secondary px-2 py-1.5">
-                <span className="font-semibold">{it.name}</span>
-                {(it.dose || it.duration) && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    — {[it.dose, it.duration].filter(Boolean).join(" · ")}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+
+          {/* Rx View Display */}
+          {room.rx ? (
+            <div className="mt-3 space-y-3">
+              {room.rx.diagnosis && (
+                <div>
+                  <span className="font-semibold text-muted-foreground">{t("ডায়াগনোসিস", "Diagnosis")}:</span>{" "}
+                  <span className="font-medium">{room.rx.diagnosis}</span>
+                </div>
+              )}
+              {room.rx.items && room.rx.items.length > 0 && (
+                <div>
+                  <span className="font-semibold text-muted-foreground block mb-1">{t("ঔষধসমূহ", "Medicines")}:</span>
+                  <div className="divide-y divide-border/60 rounded-xl border border-border/80 bg-background overflow-hidden">
+                    {room.rx.items.map((it, i) => (
+                      <div key={i} className="flex items-center justify-between p-2.5 hover:bg-secondary/30 transition">
+                        <div>
+                          <p className="font-bold text-foreground">{it.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{it.dose || "—"}</p>
+                        </div>
+                        {it.duration && (
+                          <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                            {it.duration}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {room.rx.advice && (
+                <div>
+                  <span className="font-semibold text-muted-foreground">{t("পরামর্শ", "Advice")}:</span>{" "}
+                  <span className="text-muted-foreground whitespace-pre-line">{room.rx.advice}</span>
+                </div>
+              )}
+              {room.rx.followUp && (
+                <div className="text-[11px] text-primary font-medium">
+                  <span className="font-semibold">{t("ফলো-আপ", "Follow-up")}:</span> {room.rx.followUp}
+                </div>
+              )}
+            </div>
+          ) : !isEditingRx ? (
+            <div className="py-4 text-center text-muted-foreground text-xs">
+              {t("কনসালটেশন শেষে ডাক্তার প্রেসক্রিপশন প্রদান করবেন।", "Doctor will issue prescription upon completion of consultation.")}
+            </div>
+          ) : null}
         </section>
       )}
 
@@ -363,23 +735,39 @@ export default function ConsultationClient() {
               {t("এখনো কোনো মেসেজ নেই।", "No messages yet.")}
             </p>
           )}
-          {room.messages.map((m) => (
-            <div
-              key={m.id}
-              className={`rounded-lg px-3 py-2 text-xs ${
-                m.sender === "patient" ? "bg-primary/10 ml-6" : "bg-secondary mr-6"
-              }`}
-            >
-              <p>{m.body}</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                {new Date(m.createdAt).toLocaleString(t.en ? "en-US" : "bn-BD")}
-              </p>
-            </div>
-          ))}
+          {room.messages.map((m) => {
+            const isAudio = m.fileUrl?.match(/\.(webm|mp3|wav|ogg|m4a)$/i);
+            return (
+              <div
+                key={m.id}
+                className={`rounded-lg px-3 py-2 text-xs ${
+                  m.sender === "patient" ? "bg-primary/10 ml-6" : "bg-secondary mr-6"
+                }`}
+              >
+                {m.body && <p>{m.body}</p>}
+                {m.fileUrl && isAudio && (
+                  <audio controls src={m.fileUrl} className="mt-1.5 w-full h-8" preload="metadata" />
+                )}
+                {m.fileUrl && !isAudio && (
+                  <a
+                    href={m.fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-primary underline"
+                  >
+                    <Paperclip className="h-3 w-3" /> {m.fileName || t("ফাইল দেখুন", "View file")}
+                  </a>
+                )}
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {new Date(m.createdAt).toLocaleString(t.en ? "en-US" : "bn-BD")}
+                </p>
+              </div>
+            );
+          })}
         </div>
         {appt.status !== "cancelled" && (
           <form
-            className="mt-3 flex gap-2"
+            className="mt-3 flex items-center gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               const text = msg.trim();
@@ -394,6 +782,27 @@ export default function ConsultationClient() {
             }}
           >
             <input
+              type="file"
+              ref={chatFileInputRef}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  void uploadAndSendChatMessage(f);
+                  e.target.value = "";
+                }
+              }}
+            />
+            <button
+              type="button"
+              disabled={uploadingFile}
+              onClick={() => chatFileInputRef.current?.click()}
+              className="rounded-lg border border-border p-2 text-muted-foreground hover:text-primary transition disabled:opacity-50"
+              title={t("ফাইল সংযুক্ত করুন", "Attach file")}
+            >
+              {uploadingFile ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Paperclip className="h-4 w-4" />}
+            </button>
+            <input
               value={msg}
               onChange={(e) => setMsg(e.target.value)}
               placeholder={t("মেসেজ লিখুন…", "Write a message…")}
@@ -402,7 +811,7 @@ export default function ConsultationClient() {
             <button
               type="submit"
               disabled={act.isPending || !msg.trim()}
-              className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
+              className="rounded-lg bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50 transition"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -411,64 +820,116 @@ export default function ConsultationClient() {
       </section>
 
       <section className="mt-4 rounded-2xl border border-border bg-card p-4 text-xs">
-        <h2 className="text-sm font-bold">{t("রিপোর্ট / মিডিয়া", "Reports / media")}</h2>
-        <ul className="mt-2 space-y-1">
-          {room.media.map((m) => (
-            <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-2 py-1.5">
-              <a href={m.url} target="_blank" rel="noreferrer" className="truncate text-primary underline">
-                {m.name || m.url}
-              </a>
-              <button
-                type="button"
-                className="text-[10px] text-destructive"
-                onClick={() =>
-                  act.mutate(
-                    { action: "media_delete", mediaId: m.id },
-                    { onError: (e) => toast.error(e.message) },
-                  )
-                }
-              >
-                {t("মুছুন", "Delete")}
-              </button>
-            </li>
-          ))}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold">{t("রিপোর্ট ও ভয়েস নোট", "Reports & Voice Notes")}</h2>
+          <span className="text-[11px] text-muted-foreground">{room.media.length} {t("টি ফাইল", "files")}</span>
+        </div>
+
+        <ul className="mt-3 space-y-2">
+          {room.media.map((m) => {
+            const isAudio = m.kind === "audio" || m.url.match(/\.(webm|mp3|wav|ogg|m4a)$/i);
+            return (
+              <li key={m.id} className="rounded-xl border border-border/80 bg-secondary/40 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    {isAudio ? (
+                      <Volume2 className="h-4 w-4 text-primary shrink-0" />
+                    ) : (
+                      <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
+                    )}
+                    <a
+                      href={m.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-xs font-semibold text-primary hover:underline"
+                    >
+                      {m.name || m.url}
+                    </a>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[11px] font-medium text-destructive hover:underline shrink-0"
+                    onClick={() =>
+                      act.mutate(
+                        { action: "media_delete", mediaId: m.id },
+                        { onError: (e) => toast.error(e.message) },
+                      )
+                    }
+                  >
+                    {t("মুছুন", "Delete")}
+                  </button>
+                </div>
+                {isAudio && (
+                  <audio controls src={m.url} className="mt-2 w-full h-8 rounded" preload="metadata" />
+                )}
+              </li>
+            );
+          })}
           {room.media.length === 0 && (
-            <p className="text-muted-foreground">{t("কোনো ফাইল নেই", "No files yet")}</p>
+            <p className="py-2 text-center text-muted-foreground">
+              {t("কোনো রিপোর্ট বা প্রেসক্রিপশন আপলোড করা হয়নি", "No reports or files uploaded yet")}
+            </p>
           )}
         </ul>
-        <div className="mt-2 flex flex-wrap gap-2">
+
+        {/* Upload and Voice Recorder Controls */}
+        <div className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-2">
           <input
-            value={mediaName}
-            onChange={(e) => setMediaName(e.target.value)}
-            placeholder={t("নাম", "Name")}
-            className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none"
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*,.pdf,audio/*"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                void uploadAndAttach(f, f.type.startsWith("audio/") ? "audio" : "report");
+                e.target.value = "";
+              }
+            }}
           />
-          <input
-            value={mediaUrl}
-            onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder={t("ফাইল URL", "File URL")}
-            className="min-w-[10rem] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none"
-          />
+
           <button
             type="button"
-            disabled={!mediaUrl.trim() || act.isPending}
-            onClick={() =>
-              act.mutate(
-                { action: "media_add", url: mediaUrl.trim(), name: mediaName.trim(), kind: "report" },
-                {
-                  onSuccess: () => {
-                    setMediaUrl("");
-                    setMediaName("");
-                    toast.success(t("যোগ হয়েছে", "Added"));
-                  },
-                  onError: (e) => toast.error(e.message),
-                },
-              )
-            }
-            className="rounded-lg bg-secondary px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+            disabled={uploadingFile}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:border-primary/50 transition disabled:opacity-50"
           >
-            {t("যোগ", "Add")}
+            {uploadingFile ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            ) : (
+              <Paperclip className="h-3.5 w-3.5 text-primary" />
+            )}
+            {t("রিপোর্ট/প্রেসক্রিপশন আপলোড", "Upload Report / File")}
           </button>
+
+          {!isRecording ? (
+            <button
+              type="button"
+              disabled={uploadingFile}
+              onClick={startRecording}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-rose-600 hover:border-rose-300 transition disabled:opacity-50"
+            >
+              <Mic className="h-3.5 w-3.5" />
+              {t("ভয়েস রেকর্ড করুন", "Record Voice Note")}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-1.5 text-xs text-rose-600 font-semibold animate-pulse">
+              <span className="h-2 w-2 rounded-full bg-rose-600"></span>
+              <span>
+                {Math.floor(recordingSeconds / 60)
+                  .toString()
+                  .padStart(2, "0")}
+                :{(recordingSeconds % 60).toString().padStart(2, "0")}
+              </span>
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="ml-2 flex items-center gap-1 rounded bg-rose-600 px-2 py-0.5 text-[11px] font-bold text-white hover:bg-rose-700"
+              >
+                <Square className="h-3 w-3 fill-current" /> {t("বন্ধ ও পাঠান", "Stop & Send")}
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -520,12 +981,152 @@ export default function ConsultationClient() {
             </button>
           </>
         )}
-        {isStaff && (
-          <p className="mt-2 text-[10px] text-muted-foreground">
-            {t("স্টাফ: প্রেসক্রিপশন অ্যাডমিন কনসালটস ট্যাব থেকে যোগ করুন।", "Staff: save Rx from admin Consults tab.")}
-          </p>
-        )}
       </section>
+
+      {room.rx && (
+        <div
+          id="rx-printable-sheet"
+          className="hidden print:block print:w-full print:p-8 bg-white text-black font-sans"
+        >
+          <div className="flex items-center justify-between border-b-2 border-emerald-800 pb-4">
+            <div>
+              <h1 className="text-2xl font-black text-emerald-800">ঔষধওয়ালা (Oushodhwala)</h1>
+              <p className="text-xs text-gray-600">টেলিমেডিসিন ও ডিজিটাল স্বাস্থ্যসেবা</p>
+              <p className="text-xs text-gray-500">
+                হটলাইন: {settings.supportPhone || "16263"} | support@oushodhwala.com
+              </p>
+            </div>
+            <div className="text-right">
+              <h2 className="text-base font-bold text-gray-900">
+                {room.doctor?.name || appt.doctorName}
+              </h2>
+              <p className="text-xs text-gray-600">{appt.doctorSpec}</p>
+              <p className="text-xs text-gray-500">
+                তারিখ: {new Date(appt.scheduledAt).toLocaleDateString("bn-BD")}
+              </p>
+              <p className="text-xs font-mono text-gray-500">ইনভয়েস: #{appt.invoiceNo}</p>
+            </div>
+          </div>
+
+          <div className="my-4 rounded-lg bg-gray-50 p-3 text-xs border border-gray-200 flex justify-between">
+            <div>
+              <span className="font-bold">রোগীর নাম:</span> {appt.patientName}
+            </div>
+            <div>
+              <span className="font-bold">মোবাইল:</span> {appt.phone}
+            </div>
+            <div>
+              <span className="font-bold">কনসালটেশন মাধ্যম:</span>{" "}
+              {t(
+                MODE_LABEL[appt.mode as CallMode]?.bn ?? appt.mode,
+                MODE_LABEL[appt.mode as CallMode]?.en ?? appt.mode,
+              )}
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <span className="text-3xl font-serif font-black text-emerald-900">℞</span>
+          </div>
+
+          {room.rx.diagnosis && (
+            <div className="mb-4">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                ডায়াগনোসিস / Diagnosis
+              </h3>
+              <p className="mt-1 text-sm text-gray-900 bg-emerald-50/50 p-2 rounded border border-emerald-100 font-medium">
+                {room.rx.diagnosis}
+              </p>
+            </div>
+          )}
+
+          {room.rx.items && room.rx.items.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                ঔষধের তালিকা / Prescribed Medications
+              </h3>
+              <table className="w-full text-left text-xs border-collapse border border-gray-300">
+                <thead>
+                  <tr className="border-b border-gray-300 bg-gray-100">
+                    <th className="py-2 px-3 w-8 border-r border-gray-300">#</th>
+                    <th className="py-2 px-3 border-r border-gray-300">ঔষধের নাম (Medicine Name)</th>
+                    <th className="py-2 px-3 border-r border-gray-300">ডোজ / সেবনবিধি (Dosage)</th>
+                    <th className="py-2 px-3">মেয়াদ (Duration)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {room.rx.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-200">
+                      <td className="py-2 px-3 font-mono border-r border-gray-200">{idx + 1}</td>
+                      <td className="py-2 px-3 font-semibold text-gray-900 border-r border-gray-200">
+                        {item.name}
+                      </td>
+                      <td className="py-2 px-3 text-gray-700 border-r border-gray-200">
+                        {item.dose || "—"}
+                      </td>
+                      <td className="py-2 px-3 text-gray-700">{item.duration || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {room.rx.advice && (
+            <div className="mb-4">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                পরামর্শ ও উপদেশ / Advice
+              </h3>
+              <p className="mt-1 text-xs text-gray-800 whitespace-pre-line bg-gray-50 p-2.5 rounded border border-gray-200">
+                {room.rx.advice}
+              </p>
+            </div>
+          )}
+
+          {room.rx.followUp && (
+            <div className="mb-8">
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                পরবর্তী সাক্ষাৎ / Follow Up
+              </h3>
+              <p className="mt-1 text-xs font-medium text-gray-900">{room.rx.followUp}</p>
+            </div>
+          )}
+
+          <div className="mt-12 pt-6 border-t border-gray-300 flex justify-between items-end text-xs text-gray-500">
+            <div>
+              <p>এই প্রেসক্রিপশনটি ওষধওয়ালা টেলিমেডিসিন সিস্টেম দ্বারা সংরক্ষিত ও ডিজিটালভাবে প্রস্তুতকৃত।</p>
+              <p className="text-[10px] mt-0.5 text-gray-400">
+                ঔষধ ক্রয়ের জন্য ওষধওয়ালা অনলাইন বা পার্টনার ফার্মেসিতে ব্যবহারযোগ্য।
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-40 border-b border-gray-400 mb-1"></div>
+              <p className="font-semibold text-gray-800">{room.doctor?.name || appt.doctorName}</p>
+              <p className="text-[10px]">স্বাক্ষরিত (ডিজিটাল প্রেসক্রিপশন)</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #rx-printable-sheet,
+          #rx-printable-sheet * {
+            visibility: visible;
+          }
+          #rx-printable-sheet {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            display: block !important;
+            margin: 0;
+            padding: 20px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

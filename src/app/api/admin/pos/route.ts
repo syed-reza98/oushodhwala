@@ -105,6 +105,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "NO_ITEMS" }, { status: 400 });
   }
 
+  // Idempotent duplicate check for offline sync
+  if (body.note && body.note.includes("#ref:")) {
+    const refMatch = body.note.match(/#ref:([^\s|]+)/);
+    if (refMatch) {
+      const [existing] = await db
+        .select({ invoiceNo: posSales.invoiceNo })
+        .from(posSales)
+        .where(like(posSales.note, `%#ref:${refMatch[1]}%`))
+        .limit(1);
+      if (existing) {
+        return NextResponse.json({ ok: true, invoiceNo: existing.invoiceNo, duplicate: true });
+      }
+    }
+  }
+
   const subtotal = items.reduce((a, i) => a + i.price * i.qty, 0);
   const discount = Math.max(0, Number(body.discount) || 0);
   const total = Math.max(subtotal - discount, 0);

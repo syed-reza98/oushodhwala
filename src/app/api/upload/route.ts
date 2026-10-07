@@ -29,19 +29,26 @@ const ALLOWED_EXTENSIONS = new Set([
   ".webp",
   ".svg",
   ".pdf",
+  ".webm",
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".m4a",
 ]);
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const form = await req.formData();
   const file = form.get("file");
   const bucketRaw = String(form.get("bucket") ?? "media") as StorageBucket;
+
+  // Allow guest uploads for prescription analysis and submission
+  if (!session?.user?.id && bucketRaw !== "prescriptions") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file required" }, { status: 400 });
   }
@@ -51,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Restrict staff-only buckets from regular users
-  const isStaff = hasStaffAccess(session.user.roles ?? []);
+  const isStaff = hasStaffAccess(session?.user?.roles ?? []);
   if (STAFF_ONLY_BUCKETS.includes(bucketRaw) && !isStaff) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -66,7 +73,7 @@ export async function POST(req: NextRequest) {
   const ext = path.extname(file.name || "").toLowerCase();
   if (!ALLOWED_EXTENSIONS.has(ext)) {
     return NextResponse.json(
-      { error: "Invalid file type. Allowed: JPG, PNG, WebP, PDF" },
+      { error: "Invalid file type. Allowed: Images, PDF, Audio (WebM, MP3, WAV, OGG)" },
       { status: 400 },
     );
   }

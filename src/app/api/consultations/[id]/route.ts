@@ -160,13 +160,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     advice?: string;
     items?: { name: string; dose: string; duration: string }[];
     followUp?: string;
+    fileUrl?: string;
+    fileName?: string;
   };
 
   const action = body.action ?? "";
 
   if (action === "message") {
     const text = (body.text ?? "").trim();
-    if (!text) return NextResponse.json({ error: "empty message" }, { status: 400 });
+    const fileUrl = (body.fileUrl ?? "").trim();
+    const fileName = (body.fileName ?? "").trim();
+    if (!text && !fileUrl) return NextResponse.json({ error: "empty message" }, { status: 400 });
     const mid = randomUUID();
     await db.insert(consultationMessages).values({
       id: mid,
@@ -174,6 +178,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       userId: user.id,
       sender: staff ? "staff" : "patient",
       body: text,
+      fileUrl,
+      fileName,
     });
     return NextResponse.json({ ok: true, id: mid });
   }

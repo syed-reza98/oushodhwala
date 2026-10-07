@@ -70,11 +70,15 @@ export function createLocalStorage(): StorageDriver {
     },
 
     async readUpload(rel: string) {
-      if (!rel || rel.includes("..")) return null;
-      const abs = path.join(uploadRoot(), rel);
-      const root = uploadRoot();
-      if (!abs.startsWith(root)) return null;
+      if (!rel) return null;
       try {
+        if (path.isAbsolute(rel)) {
+          const buffer = await readFile(rel);
+          return { buffer, contentType: guessType(path.extname(rel).toLowerCase()) };
+        }
+        if (rel.includes("..")) return null;
+        const cleaned = rel.replace(/^\/?(uploads\/)?/, "");
+        const abs = path.join(uploadRoot(), cleaned);
         const buffer = await readFile(abs);
         return { buffer, contentType: guessType(path.extname(abs).toLowerCase()) };
       } catch {

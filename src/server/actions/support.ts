@@ -4,7 +4,7 @@ import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "@/server/db";
 import { products, supportConversations, supportMessages } from "@/server/db/schema";
-import { aiConfigured } from "@/server/ai/gateway";
+import { aiConfigured, getGeminiApiKey, generateGeminiText } from "@/server/ai/gateway";
 
 const AGENT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -108,14 +108,7 @@ export async function replySupportAI(input: {
   const snippet = lastUser ? await catalogSnippet(lastUser.body) : "";
 
   try {
-    const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-    const { generateText } = await import("ai");
-    const key = process.env.LOVABLE_API_KEY || process.env.AI_GATEWAY_API_KEY || "";
-    const provider = createOpenAICompatible({
-      name: "lovable",
-      apiKey: key,
-      baseURL: process.env.AI_GATEWAY_BASE_URL || "https://api.openai.com/v1",
-    });
+    let raw = "";
 
     const history = rows.map((m) => ({
       role: (m.sender === "user" ? "user" : "assistant") as "user" | "assistant",
@@ -123,14 +116,36 @@ export async function replySupportAI(input: {
         m.sender === "agent" ? `[Customer care] ${m.body}` : m.body,
     }));
 
-    const { text: raw } = await generateText({
-      model: provider(process.env.AI_MODEL || "gpt-4o-mini"),
-      system:
+    if (getGeminiApiKey()) {
+      const systemInstruction =
         (input.lang === "en" ? SYSTEM_EN : SYSTEM_BN) +
-        (snippet ? `\n\nCatalog matches:\n${snippet}` : ""),
-      messages: history,
-      maxOutputTokens: 600,
-    });
+        (snippet ? `\n\nCatalog matches:\n${snippet}` : "");
+      const prompt = [
+        "Conversation History:",
+        ...history.map((h) => `${h.role}: ${h.content}`),
+        "Assistant:",
+      ].join("\n");
+      raw = await generateGeminiText(prompt, systemInstruction);
+    } else {
+      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { generateText } = await import("ai");
+      const key = process.env.LOVABLE_API_KEY || process.env.AI_GATEWAY_API_KEY || "";
+      const provider = createOpenAICompatible({
+        name: "lovable",
+        apiKey: key,
+        baseURL: process.env.AI_GATEWAY_BASE_URL || "https://api.openai.com/v1",
+      });
+
+      const res = await generateText({
+        model: provider(process.env.AI_MODEL || "gpt-4o-mini"),
+        system:
+          (input.lang === "en" ? SYSTEM_EN : SYSTEM_BN) +
+          (snippet ? `\n\nCatalog matches:\n${snippet}` : ""),
+        messages: history,
+        maxOutputTokens: 600,
+      });
+      raw = res.text;
+    }
 
     // re-check agent takeover
     const [again] = await db
@@ -187,26 +202,42 @@ export async function askSupportGuest(input: {
   }
 
   try {
-    const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
-    const { generateText } = await import("ai");
-    const key = process.env.LOVABLE_API_KEY || process.env.AI_GATEWAY_API_KEY || "";
-    const provider = createOpenAICompatible({
-      name: "lovable",
-      apiKey: key,
-      baseURL: process.env.AI_GATEWAY_BASE_URL || "https://api.openai.com/v1",
-    });
-    const { text } = await generateText({
-      model: provider(process.env.AI_MODEL || "gpt-4o-mini"),
-      system:
+    let raw = "";
+    if (getGeminiApiKey()) {
+      const systemInstruction =
         (input.lang === "en" ? SYSTEM_EN : SYSTEM_BN) +
         "\nGuest is not signed in — do not invent personal order data; ask them to sign in for that." +
-        (snippet ? `\n\nCatalog matches:\n${snippet}` : ""),
-      messages: input.messages.slice(-12),
-      maxOutputTokens: 500,
-    });
+        (snippet ? `\n\nCatalog matches:\n${snippet}` : "");
+      const prompt = [
+        "Customer Messages:",
+        ...input.messages.slice(-12).map((m) => `${m.role}: ${m.content}`),
+        "Assistant:",
+      ].join("\n");
+      raw = await generateGeminiText(prompt, systemInstruction);
+    } else {
+      const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+      const { generateText } = await import("ai");
+      const key = process.env.LOVABLE_API_KEY || process.env.AI_GATEWAY_API_KEY || "";
+      const provider = createOpenAICompatible({
+        name: "lovable",
+        apiKey: key,
+        baseURL: process.env.AI_GATEWAY_BASE_URL || "https://api.openai.com/v1",
+      });
+      const res = await generateText({
+        model: provider(process.env.AI_MODEL || "gpt-4o-mini"),
+        system:
+          (input.lang === "en" ? SYSTEM_EN : SYSTEM_BN) +
+          "\nGuest is not signed in — do not invent personal order data; ask them to sign in for that." +
+          (snippet ? `\n\nCatalog matches:\n${snippet}` : ""),
+        messages: input.messages.slice(-12),
+        maxOutputTokens: 500,
+      });
+      raw = res.text;
+    }
+
     return {
       text:
-        text.trim() ||
+        raw.trim() ||
         (input.lang === "en" ? "Sorry, I couldn't find that." : "দুঃখিত, উত্তর পাওয়া যায়নি।"),
     };
   } catch {

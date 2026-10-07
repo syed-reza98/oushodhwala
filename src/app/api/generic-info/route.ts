@@ -13,7 +13,20 @@ export async function GET(req: NextRequest) {
   const q = (sp.get("q") ?? "").trim();
 
   if (key) {
-    const [row] = await db.select().from(genericInfo).where(eq(genericInfo.key, key)).limit(1);
+    const rawKey = key.toLowerCase();
+    const cleanKey = rawKey.replace(/[\d.]+\s*(mg|ml|mcg|gm|g|iu|%)/gi, "").trim();
+    const [row] = await db
+      .select()
+      .from(genericInfo)
+      .where(
+        or(
+          eq(genericInfo.key, rawKey),
+          eq(genericInfo.key, cleanKey),
+          like(genericInfo.key, `%${cleanKey}%`),
+          like(genericInfo.name, `%${cleanKey}%`),
+        ),
+      )
+      .limit(1);
     return NextResponse.json({ item: row ?? null });
   }
 

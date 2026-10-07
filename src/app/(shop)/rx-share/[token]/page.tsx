@@ -73,7 +73,7 @@ export default function RxSharePage() {
             <pre className="whitespace-pre-wrap text-[11px]">{data.ocrText}</pre>
           </div>
         )}
-        {!!data.filePaths?.length && (
+        {Array.isArray(data.filePaths) && data.filePaths.length > 0 && (
           <ul className="space-y-1">
             {data.filePaths.map((p) => (
               <li key={p}>

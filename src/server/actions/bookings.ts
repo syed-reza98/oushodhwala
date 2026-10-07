@@ -113,3 +113,29 @@ export async function listMyDiagnosticBookings() {
     createdAt: b.createdAt,
   }));
 }
+
+export async function listMyHomeServiceRequests() {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+  const rows = await db
+    .select()
+    .from(serviceRequests)
+    .where(eq(serviceRequests.userId, session.user.id))
+    .orderBy(desc(serviceRequests.createdAt))
+    .limit(30);
+  return rows.map((r) => ({
+    id: r.id,
+    requestNo: r.requestNo,
+    serviceSlug: r.serviceSlug,
+    serviceName: r.serviceName,
+    patientName: r.patientName,
+    phone: r.phone,
+    address: r.address,
+    scheduledDate: r.scheduledDate,
+    slot: r.slot,
+    fee: Number(r.fee),
+    status: r.status,
+    note: r.note,
+    createdAt: r.createdAt,
+  }));
+}

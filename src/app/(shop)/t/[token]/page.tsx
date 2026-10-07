@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Lock, TimerOff, Truck } from "lucide-react";
+import { Lock, TimerOff, Truck, Navigation } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { LiveMap } from "@/components/LiveMap";
 
 type TrackPayload = {
   found: boolean;
@@ -17,6 +18,15 @@ type TrackPayload = {
   customer_name?: string;
   created_at?: string;
   items?: { name: string; qty: number }[];
+  delivery?: {
+    status: string;
+    etaMinutes: number;
+    lastLat: number | null;
+    lastLng: number | null;
+    lastSeenAt: string | null;
+    destLat?: number | null;
+    destLng?: number | null;
+  } | null;
 };
 
 export default function PublicTrackTokenPage() {
@@ -35,7 +45,7 @@ export default function PublicTrackTokenPage() {
       if (!cancelled) setData(json);
     };
     void load();
-    const id = setInterval(() => void load(), 15_000);
+    const id = setInterval(() => void load(), 12_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -67,22 +77,24 @@ export default function PublicTrackTokenPage() {
   }
 
   return (
-    <div className="pt-4 pb-10">
-      <h1 className="text-base font-bold">{t("পাবলিক ট্র্যাক", "Public track")}</h1>
-      <p className="mt-2 text-xs text-muted-foreground">
+    <div className="pt-4 pb-12 max-w-2xl mx-auto px-2 sm:px-4">
+      <h1 className="text-base font-bold text-foreground">{t("পাবলিক ডেলিভারি ট্র্যাকিং", "Public Delivery Track")}</h1>
+      <p className="mt-1 text-xs text-muted-foreground">
         {t("অর্ডার", "Order")} <span className="font-bold text-navy">#{data.order_no}</span>
       </p>
-      <div className="mt-4 rounded-2xl border border-border bg-card p-4 text-xs space-y-2">
+
+      <div className="mt-4 rounded-2xl border border-border bg-card p-4 text-xs space-y-2 shadow-xs">
         <p>
           <span className="text-muted-foreground">{t("স্ট্যাটাস", "Status")}: </span>
-          <span className="font-bold">{data.status}</span>
+          <span className="font-bold text-primary capitalize">{data.status}</span>
         </p>
         <p>
           <span className="text-muted-foreground">{t("পেমেন্ট", "Payment")}: </span>
           {data.payment_method} · {data.payment_status}
         </p>
         <p>
-          <span className="text-muted-foreground">{t("মোট", "Total")}: </span>৳{data.total}
+          <span className="text-muted-foreground">{t("মোট", "Total")}: </span>
+          <span className="font-bold">৳{data.total}</span>
         </p>
         {data.customer_name && (
           <p>
@@ -91,18 +103,47 @@ export default function PublicTrackTokenPage() {
           </p>
         )}
       </div>
-      {!!data.items?.length && (
-        <ul className="mt-3 space-y-1 text-xs">
-          {data.items.map((it, i) => (
-            <li key={`${it.name}-${i}`} className="rounded-lg border border-border bg-card px-3 py-2">
-              {it.name} × {it.qty}
-            </li>
-          ))}
-        </ul>
+
+      {data.delivery && data.delivery.lastLat != null && data.delivery.lastLng != null && (
+        <div className="mt-4 rounded-2xl border border-primary/20 bg-card p-4 shadow-xs">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-foreground mb-2">
+            <Navigation className="h-4 w-4 text-primary" />
+            <span>{t("রাইডারের অবস্থান", "Rider Location")} (ETA ~{data.delivery.etaMinutes}m)</span>
+          </div>
+          <LiveMap
+            riderLat={data.delivery.lastLat}
+            riderLng={data.delivery.lastLng}
+            destLat={data.delivery.destLat}
+            destLng={data.delivery.destLng}
+            lastSeen={data.delivery.lastSeenAt}
+          />
+        </div>
       )}
-      <Link href="/orders" className="mt-4 inline-block text-xs font-semibold text-primary underline">
-        {t("অর্ডার", "Orders")}
-      </Link>
+
+      {!!data.items?.length && (
+        <div className="mt-4 rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
+          <div className="border-b border-border bg-secondary/30 px-4 py-2 text-xs font-bold">
+            {t("পণ্যসমূহ", "Items")}
+          </div>
+          <ul className="divide-y divide-border">
+            {data.items.map((it, i) => (
+              <li key={`${it.name}-${i}`} className="flex justify-between px-4 py-2 text-xs">
+                <span>{it.name}</span>
+                <span className="font-bold text-muted-foreground">× {it.qty}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between">
+        <Link href="/orders" className="text-xs font-semibold text-primary underline">
+          {t("আমার অর্ডার", "My Orders")}
+        </Link>
+        <Link href="/" className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+          {t("হোম", "Home")}
+        </Link>
+      </div>
     </div>
   );
 }

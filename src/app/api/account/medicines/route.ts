@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, and } from "drizzle-orm";
 import { db } from "@/server/db";
 import { products, userFavorites, userRecentMedicines } from "@/server/db/schema";
 import { requireUser } from "@/server/services/authz";
@@ -57,4 +57,29 @@ export async function GET() {
       lastViewedAt: r.lastViewedAt,
     })),
   });
+}
+
+export async function PUT(req: Request) {
+  let user: { id: string };
+  try {
+    user = await requireUser();
+  } catch {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  const { productIds } = (await req.json()) as { productIds?: string[] };
+  if (!Array.isArray(productIds)) {
+    return NextResponse.json({ error: "productIds array required" }, { status: 400 });
+  }
+
+  for (let i = 0; i < productIds.length; i++) {
+    const pid = productIds[i];
+    if (!pid) continue;
+    await db
+      .update(userFavorites)
+      .set({ sortOrder: i })
+      .where(and(eq(userFavorites.userId, user.id), eq(userFavorites.productId, pid)));
+  }
+
+  return NextResponse.json({ ok: true });
 }

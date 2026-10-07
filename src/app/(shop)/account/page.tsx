@@ -23,6 +23,7 @@ import { countMyOrders } from "@/server/actions/orders";
 import { countMyPrescriptions, listMyPrescriptions } from "@/server/actions/prescriptions";
 import { listMyAppointments } from "@/server/actions/appointments";
 import { useT } from "@/lib/i18n";
+import { LoyaltyCard } from "@/components/LoyaltyCard";
 
 export default function AccountPage() {
   const t = useT();
@@ -129,6 +130,8 @@ export default function AccountPage() {
           <ShieldCheck className="h-4 w-4" /> {t("অ্যাডমিন ড্যাশবোর্ড", "Admin dashboard")}
         </Link>
       )}
+
+      <LoyaltyCard />
 
       {/* My Prescriptions Section */}
       <div className="mt-5">

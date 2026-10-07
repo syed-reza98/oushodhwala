@@ -24,17 +24,32 @@ export async function GET() {
     .limit(200);
 
   return NextResponse.json({
-    items: rows.map((r) => ({
-      id: r.id,
-      userId: r.userId,
-      status: r.status,
-      phone: r.phone,
-      note: r.note,
-      adminNote: r.adminNote,
-      filePaths: r.filePaths ?? [],
-      ocrText: r.ocrText,
-      createdAt: r.createdAt,
-    })),
+    items: rows.map((r) => {
+      const raw = r.filePaths;
+      const filePaths: string[] = Array.isArray(raw)
+        ? raw
+        : typeof raw === "string"
+          ? (() => {
+              try {
+                const p = JSON.parse(raw);
+                return Array.isArray(p) ? p : [raw];
+              } catch {
+                return raw ? [raw] : [];
+              }
+            })()
+          : [];
+      return {
+        id: r.id,
+        userId: r.userId,
+        status: r.status,
+        phone: r.phone,
+        note: r.note,
+        adminNote: r.adminNote,
+        filePaths,
+        ocrText: r.ocrText,
+        createdAt: r.createdAt,
+      };
+    }),
   });
 }
 

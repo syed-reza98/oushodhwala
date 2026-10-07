@@ -13,15 +13,26 @@ import {
   Phone,
   CheckCircle2,
   ExternalLink,
+  Printer,
+  Edit2,
+  Check,
+  X,
+  Hospital,
+  User,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
 import {
   getPrescriptionById,
   runPrescriptionAiOcr,
+  updatePrescriptionMetadata,
 } from "@/server/actions/prescriptions";
 import { RxInteractions, type InteractionMed } from "@/components/RxInteractions";
 import { PrescriptionMatchedMeds } from "@/components/PrescriptionMatchedMeds";
+import { RxShareManager } from "@/components/RxShareManager";
+import { printRxSummary, type RxSummary, type RxSummaryLine } from "@/lib/rx-summary";
+import { getGuestToken } from "@/lib/rx-guest";
 import type { RxExtractedData, RxExtractedItem } from "@/server/ai/gateway";
 
 export default function PrescriptionDetailPage() {
@@ -30,14 +41,42 @@ export default function PrescriptionDetailPage() {
   const [row, setRow] = useState<Awaited<ReturnType<typeof getPrescriptionById>>>(null);
   const [loading, setLoading] = useState(true);
   const [runningOcr, setRunningOcr] = useState(false);
+  const [guestToken, setGuestToken] = useState("");
+
+  // Editable metadata state
+  const [isEditingMeta, setIsEditingMeta] = useState(false);
+  const [editDoctor, setEditDoctor] = useState("");
+  const [editPatient, setEditPatient] = useState("");
+  const [editHospital, setEditHospital] = useState("");
+  const [editAdvice, setEditAdvice] = useState("");
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  useEffect(() => {
+    const tok = getGuestToken();
+    setGuestToken(tok);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const tok = getGuestToken();
     (async () => {
       setLoading(true);
       try {
-        const data = await getPrescriptionById(params.id);
-        if (!cancelled) setRow(data);
+        const data = await getPrescriptionById(params.id, tok || undefined);
+        if (!cancelled && data) {
+          setRow(data);
+          const rawOcr = data.ocrJson;
+          const ocrObj = typeof rawOcr === "string" ? (() => { try { return JSON.parse(rawOcr); } catch { return null; } })() : rawOcr;
+          const parsed = (ocrObj && typeof ocrObj === "object"
+            ? (("data" in ocrObj
+                ? (ocrObj as { data?: RxExtractedData }).data
+                : ocrObj) as RxExtractedData)
+            : null) || null;
+          setEditDoctor(parsed?.doctorName || "");
+          setEditPatient(parsed?.patientName || "");
+          setEditHospital(parsed?.hospital || "");
+          setEditAdvice(parsed?.advice || "");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -51,7 +90,7 @@ export default function PrescriptionDetailPage() {
     if (!row) return;
     setRunningOcr(true);
     try {
-      const res = await runPrescriptionAiOcr(row.id);
+      const res = await runPrescriptionAiOcr(row.id, guestToken || undefined);
       setRow((prev) =>
         prev
           ? {
@@ -61,6 +100,32 @@ export default function PrescriptionDetailPage() {
             }
           : prev,
       );
+
+      const rawOcr = res.ocrJson;
+      const ocrObj =
+        typeof rawOcr === "string"
+          ? (() => {
+              try {
+                return JSON.parse(rawOcr);
+              } catch {
+                return null;
+              }
+            })()
+          : rawOcr;
+      const parsed =
+        (ocrObj && typeof ocrObj === "object"
+          ? (("data" in ocrObj
+              ? (ocrObj as { data?: RxExtractedData }).data
+              : ocrObj) as RxExtractedData)
+          : null) || null;
+
+      if (parsed) {
+        setEditDoctor(parsed.doctorName || "");
+        setEditPatient(parsed.patientName || "");
+        setEditHospital(parsed.hospital || "");
+        setEditAdvice(parsed.advice || "");
+      }
+
       toast.success(t("AI প্রেসক্রিপশন রিডিং সম্পন্ন!", "AI Prescription reading completed!"));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "AI OCR failed");
@@ -69,12 +134,57 @@ export default function PrescriptionDetailPage() {
     }
   };
 
+  const handleSaveMetadata = async () => {
+    if (!row) return;
+    setSavingMeta(true);
+    try {
+      const currentJson = (row.ocrJson || {}) as Record<string, unknown>;
+      const currentData = (currentJson.data || currentJson) as Record<string, unknown>;
+      const updatedData = {
+        ...currentData,
+        doctorName: editDoctor.trim(),
+        patientName: editPatient.trim(),
+        hospital: editHospital.trim(),
+        advice: editAdvice.trim(),
+      };
+      const newOcrJson = "data" in currentJson
+        ? { ...currentJson, data: updatedData }
+        : updatedData;
+
+      await updatePrescriptionMetadata(
+        row.id,
+        { ocrJson: newOcrJson },
+        guestToken || undefined,
+      );
+
+      setRow((prev) => (prev ? { ...prev, ocrJson: newOcrJson } : prev));
+      setIsEditingMeta(false);
+      toast.success(t("তথ্য সংরক্ষিত হয়েছে", "Information updated"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingMeta(false);
+    }
+  };
+
   // Extract structured items if available
+  const rawOcrObj = row?.ocrJson;
+  const safeOcrObj =
+    typeof rawOcrObj === "string"
+      ? (() => {
+          try {
+            return JSON.parse(rawOcrObj);
+          } catch {
+            return null;
+          }
+        })()
+      : rawOcrObj;
+
   const parsedData: RxExtractedData | null =
-    row?.ocrJson && typeof row.ocrJson === "object" && "data" in row.ocrJson
-      ? ((row.ocrJson as { data?: RxExtractedData }).data ?? null)
-      : row?.ocrJson && typeof row.ocrJson === "object" && "items" in row.ocrJson
-        ? (row.ocrJson as unknown as RxExtractedData)
+    safeOcrObj && typeof safeOcrObj === "object" && "data" in safeOcrObj
+      ? ((safeOcrObj as { data?: RxExtractedData }).data ?? null)
+      : safeOcrObj && typeof safeOcrObj === "object" && "items" in safeOcrObj
+        ? (safeOcrObj as unknown as RxExtractedData)
         : null;
 
   const itemsList: RxExtractedItem[] = parsedData?.items ?? [];
@@ -99,6 +209,41 @@ export default function PrescriptionDetailPage() {
     strength: it.strength,
   }));
 
+  const handlePrint = () => {
+    if (!row) return;
+    const lines: RxSummaryLine[] = itemsList.map((it, idx) => ({
+      no: idx + 1,
+      name: it.name,
+      generic: it.generic || "",
+      strength: it.strength || "",
+      form: it.form || "",
+      pack: "",
+      dose: it.dose || "",
+      duration: it.duration || "",
+      instruction: it.instruction || "",
+      qty: 1,
+      price: 0,
+      confidence: 1,
+      excluded: false,
+    }));
+
+    const summary: RxSummary = {
+      id: row.id,
+      patientName: parsedData?.patientName || "",
+      patientAge: parsedData?.patientAge || "",
+      hospital: parsedData?.hospital || "",
+      doctorName: parsedData?.doctorName || "",
+      date: new Date(row.createdAt).toLocaleDateString(),
+      advice: parsedData?.advice || "",
+      note: row.note || "",
+      verifiedAt: row.updatedAt,
+      lines,
+      total: 0,
+    };
+
+    printRxSummary(summary, { en: false, n: (n: number) => t.n(n) });
+  };
+
   const statusColor: Record<string, string> = {
     pending: "bg-amber-500/10 text-amber-600 border-amber-500/30",
     reviewing: "bg-blue-500/10 text-blue-600 border-blue-500/30",
@@ -109,12 +254,28 @@ export default function PrescriptionDetailPage() {
 
   return (
     <div className="pt-4 pb-12 max-w-4xl mx-auto px-2 sm:px-4">
-      <Link
-        href="/prescription"
-        className="inline-flex items-center text-xs font-semibold text-muted-foreground hover:text-primary mb-3"
-      >
-        ← {t("প্রেসক্রিপশন তালিকা", "Prescription list")}
-      </Link>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <Link
+          href="/prescription"
+          className="inline-flex items-center text-xs font-semibold text-muted-foreground hover:text-primary"
+        >
+          ← {t("প্রেসক্রিপশন তালিকা", "Prescription list")}
+        </Link>
+
+        {row && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition shadow-2xs"
+            >
+              <Printer className="h-3.5 w-3.5 text-primary" />
+              {t("প্রিন্ট সারাংশ", "Print Summary")}
+            </button>
+            <RxShareManager id={row.id} guestToken={guestToken} />
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
         <div>
@@ -257,31 +418,99 @@ export default function PrescriptionDetailPage() {
               </button>
             </div>
 
-            {/* Extracted Clinical Metadata */}
-            {parsedData && (parsedData.doctorName || parsedData.patientName || parsedData.hospital) && (
-              <div className="mt-3 grid gap-2 sm:grid-cols-3 rounded-xl bg-secondary/60 p-3 text-[11px]">
-                {parsedData.doctorName && (
-                  <div>
-                    <span className="text-muted-foreground block">{t("ডাক্তার:", "Doctor:")}</span>
-                    <span className="font-bold text-foreground">{parsedData.doctorName}</span>
-                  </div>
-                )}
-                {parsedData.patientName && (
-                  <div>
-                    <span className="text-muted-foreground block">{t("রোগী:", "Patient:")}</span>
-                    <span className="font-bold text-foreground">
-                      {parsedData.patientName} {parsedData.patientAge ? `(${parsedData.patientAge})` : ""}
-                    </span>
-                  </div>
-                )}
-                {parsedData.hospital && (
-                  <div>
-                    <span className="text-muted-foreground block">{t("হাসপাতাল / ক্লিনিক:", "Clinic:")}</span>
-                    <span className="font-bold text-foreground">{parsedData.hospital}</span>
+            {/* Extracted Clinical Metadata / Editable */}
+            <div className="mt-3 rounded-xl bg-secondary/60 p-3 text-xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-bold text-foreground text-[11px] flex items-center gap-1">
+                  <User className="h-3.5 w-3.5 text-primary" />
+                  {t("প্রেসক্রিপশন মেটাডাটা", "Clinical Information")}
+                </span>
+                {!isEditingMeta ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMeta(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                    {t("সম্পাদনা করুন", "Edit details")}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={savingMeta}
+                      onClick={() => void handleSaveMetadata()}
+                      className="inline-flex items-center gap-1 rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground hover:opacity-90"
+                    >
+                      <Check className="h-3 w-3" />
+                      {savingMeta ? t("সংরক্ষণ...", "Saving...") : t("সংরক্ষণ", "Save")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingMeta(false)}
+                      className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-secondary"
+                    >
+                      <X className="h-3 w-3" />
+                      {t("বাতিল", "Cancel")}
+                    </button>
                   </div>
                 )}
               </div>
-            )}
+
+              {isEditingMeta ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-semibold">{t("ডাক্তারের নাম", "Doctor Name")}</label>
+                    <input
+                      value={editDoctor}
+                      onChange={(e) => setEditDoctor(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-border bg-card px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-semibold">{t("রোগীর নাম", "Patient Name")}</label>
+                    <input
+                      value={editPatient}
+                      onChange={(e) => setEditPatient(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-border bg-card px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground font-semibold">{t("হাসপাতাল / চেম্বার", "Hospital / Chamber")}</label>
+                    <input
+                      value={editHospital}
+                      onChange={(e) => setEditHospital(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-border bg-card px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="text-[10px] text-muted-foreground font-semibold">{t("পরামর্শ ও নোট", "Advice & Notes")}</label>
+                    <input
+                      value={editAdvice}
+                      onChange={(e) => setEditAdvice(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-border bg-card px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground block">{t("ডাক্তার:", "Doctor:")}</span>
+                    <span className="font-bold text-foreground">{parsedData?.doctorName || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">{t("রোগী:", "Patient:")}</span>
+                    <span className="font-bold text-foreground">
+                      {parsedData?.patientName || "—"} {parsedData?.patientAge ? `(${parsedData.patientAge})` : ""}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">{t("হাসপাতাল / চেম্বার:", "Hospital:")}</span>
+                    <span className="font-bold text-foreground">{parsedData?.hospital || "—"}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Extracted Medicine Items Table */}
             {itemsList.length > 0 ? (
@@ -331,7 +560,7 @@ export default function PrescriptionDetailPage() {
               </p>
             )}
 
-            {parsedData?.advice && (
+            {parsedData?.advice && !isEditingMeta && (
               <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs">
                 <span className="font-bold text-primary block mb-0.5">{t("ডাক্তারের পরামর্শ:", "Doctor's Advice:")}</span>
                 <p className="text-foreground">{parsedData.advice}</p>

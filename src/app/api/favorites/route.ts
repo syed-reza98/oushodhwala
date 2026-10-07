@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/server/db";
 import { products, userFavorites, userRecentMedicines } from "@/server/db/schema";
 import { requireUser } from "@/server/services/authz";
@@ -61,10 +61,41 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json()) as {
-    action?: "toggle" | "view";
+    action?: "toggle" | "view" | "bulk_remove" | "bulk_add";
     productId?: string;
+    productIds?: string[];
   };
   const action = body.action ?? "toggle";
+
+  if (action === "bulk_remove") {
+    const pids = (body.productIds ?? []).filter(Boolean);
+    if (!pids.length) return NextResponse.json({ error: "productIds required" }, { status: 400 });
+    await db
+      .delete(userFavorites)
+      .where(and(eq(userFavorites.userId, user.id), inArray(userFavorites.productId, pids)));
+    return NextResponse.json({ ok: true, removed: pids.length });
+  }
+
+  if (action === "bulk_add") {
+    const pids = (body.productIds ?? []).filter(Boolean);
+    if (!pids.length) return NextResponse.json({ error: "productIds required" }, { status: 400 });
+    for (const pid of pids) {
+      const [exists] = await db
+        .select({ id: userFavorites.id })
+        .from(userFavorites)
+        .where(and(eq(userFavorites.userId, user.id), eq(userFavorites.productId, pid)))
+        .limit(1);
+      if (!exists) {
+        await db.insert(userFavorites).values({
+          id: randomUUID(),
+          userId: user.id,
+          productId: pid,
+        });
+      }
+    }
+    return NextResponse.json({ ok: true, added: pids.length });
+  }
+
   const productId = (body.productId ?? "").trim();
   if (!productId) {
     return NextResponse.json({ error: "productId required" }, { status: 400 });

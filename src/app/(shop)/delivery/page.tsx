@@ -7,8 +7,8 @@ import { Bike } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18n";
 
-import { useState } from "react";
-import { Camera, CheckCircle2, ShieldCheck, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Camera, CheckCircle2, ShieldCheck, MapPin, Phone, MessageCircle } from "lucide-react";
 import { SignaturePad } from "@/components/SignaturePad";
 
 type DeliveryRow = {
@@ -16,6 +16,9 @@ type DeliveryRow = {
   orderNo: string;
   status: string;
   riderName: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
   etaMinutes: number;
   otp?: string | null;
   podPhotoUrl?: string | null;
@@ -35,6 +38,51 @@ export default function DeliveryPage() {
   const [podSigns, setPodSigns] = useState<Record<string, string>>({});
   const [activePodId, setActivePodId] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [gpsActive, setGpsActive] = useState(false);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // HTML5 Live Geolocation tracking
+  useEffect(() => {
+    if (!gpsActive || !user?.id) return;
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      toast.error(t("ডিভাইসে জিপিএস সাপোর্ট নেই", "Geolocation not supported"));
+      setGpsActive(false);
+      return;
+    }
+
+    let lastPing = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setGpsCoords({ lat: latitude, lng: longitude });
+
+        const now = Date.now();
+        if (now - lastPing > 10_000) {
+          lastPing = now;
+          try {
+            await fetch("/api/admin/delivery", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                action: "ping",
+                riderId: user.id,
+                lat: latitude,
+                lng: longitude,
+              }),
+            });
+          } catch {}
+        }
+      },
+      (err) => {
+        console.warn("GPS tracking error:", err);
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 15_000 },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [gpsActive, user?.id, t]);
 
   const listQ = useQuery({
     queryKey: ["staff-delivery"],
@@ -146,13 +194,41 @@ export default function DeliveryPage() {
 
   return (
     <div className="pt-4 pb-10">
-      <h1 className="flex items-center gap-2 font-display text-lg font-extrabold">
-        <Bike className="h-5 w-5 text-primary" />
-        {t("ডেলিভারি প্যানেল", "Delivery panel")}
-      </h1>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {t("অ্যাসাইন করা অর্ডার ও স্ট্যাটাস আপডেট।", "Assigned orders and status updates.")}
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 font-display text-lg font-extrabold">
+            <Bike className="h-5 w-5 text-primary" />
+            {t("ডেলিভারি প্যানেল", "Delivery panel")}
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("অ্যাসাইন করা অর্ডার ও স্ট্যাটাস আপডেট।", "Assigned orders and status updates.")}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setGpsActive(!gpsActive)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition shadow-xs ${
+              gpsActive
+                ? "bg-emerald-600 text-white animate-pulse"
+                : "border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+            }`}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            {gpsActive
+              ? t("লাইভ জিপিএস সক্রিয় (লোকেশন ব্রডকাস্ট হচ্ছে)", "Live GPS Active (Broadcasting)")
+              : t("জিপিএস ট্র্যাকিং চালু করুন", "Enable GPS Tracking")}
+          </button>
+        </div>
+      </div>
+
+      {gpsActive && gpsCoords && (
+        <div className="mt-2 text-[10px] font-mono text-muted-foreground flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+          <span>GPS Coords: {gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)}</span>
+        </div>
+      )}
 
       {listQ.isLoading ? (
         <p className="mt-8 text-center text-xs text-muted-foreground">{t("লোড হচ্ছে...", "Loading...")}</p>
@@ -188,6 +264,31 @@ export default function DeliveryPage() {
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   {d.lastEvent.note || d.lastEvent.status}
                 </p>
+              )}
+
+              {d.customerPhone && (
+                <div className="mt-2.5 rounded-xl border border-border/80 bg-secondary/40 p-2.5 text-xs flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-navy truncate">{d.customerName || t("গ্রাহক", "Customer")}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{d.deliveryAddress || d.customerPhone}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href={`tel:${d.customerPhone.replace(/[^\d+]/g, "")}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition"
+                    >
+                      <Phone className="h-3 w-3" /> {t("কল", "Call")}
+                    </a>
+                    <a
+                      href={`https://wa.me/${d.customerPhone.replace(/\D/g, "").startsWith("88") ? d.customerPhone.replace(/\D/g, "") : `88${d.customerPhone.replace(/\D/g, "")}`}?text=${encodeURIComponent(`ঔষধওয়ালা ডেলিভারি রাইডার: আপনার অর্ডার #${d.orderNo} নিয়ে আমি ডেলিভারির জন্য আসছি।`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+                    >
+                      <MessageCircle className="h-3 w-3" /> WhatsApp
+                    </a>
+                  </div>
+                </div>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 {["picked_up", "in_transit"].map((s) => (

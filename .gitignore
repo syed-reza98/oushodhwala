@@ -36,3 +36,4 @@ storage/uploads/**
 drizzle/meta
 *.tar.gz
 *.tsbuildinfo
+oushodhwala-main-legacy/

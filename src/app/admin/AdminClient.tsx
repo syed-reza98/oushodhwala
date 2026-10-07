@@ -34,6 +34,7 @@ import {
   StockCountPanel,
   TestsPanel,
 } from "@/components/admin/RemainingErpPanels";
+import { ServiceRequestsAdmin } from "@/components/admin/ServiceRequestsAdmin";
 
 const MEDIA_KINDS = [
   { id: "box", t: "পণ্যের বক্স" },
@@ -75,6 +76,7 @@ const GROUPS: AdminNavGroup[] = [
       { id: "pos", t: "POS", icon: "orders" },
       { id: "delivery", t: "ডেলিভারি", icon: "delivery" },
       { id: "diagnostics", t: "হোম ডায়াগনস্টিক", icon: "diagnostics" },
+      { id: "services", t: "হোম হেলথকেয়ার সেবা", icon: "diagnostics" },
       { id: "consults", t: "কনসালটেশন", icon: "doctors" },
       { id: "stock", t: "স্টক", icon: "products" },
       { id: "stockcount", t: "স্টক কাউন্ট", icon: "products" },
@@ -2898,7 +2900,7 @@ export default function AdminClient() {
                       <p className="line-clamp-3">{r.note || r.ocrText || "—"}</p>
                     </td>
                     <td className="px-3 py-2">
-                      {r.filePaths.map((p) => (
+                      {(Array.isArray(r.filePaths) ? r.filePaths : []).map((p) => (
                         <a
                           key={p}
                           href={`/uploads/${p}`}
@@ -4397,6 +4399,8 @@ export default function AdminClient() {
             </div>
           </div>
         )}
+
+        {active === "services" && <ServiceRequestsAdmin />}
 
         {active === "stock" && (
           <div className="space-y-3">

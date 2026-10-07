@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/server/db";
-import { orderItems, orders } from "@/server/db/schema";
+import { orderItems, orders, deliveries } from "@/server/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +17,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ found: false, reason: "invalid" });
   }
 
-  const items = await db
-    .select({ name: orderItems.name, qty: orderItems.qty })
-    .from(orderItems)
-    .where(eq(orderItems.orderId, order.id));
+  const [items, [delivery]] = await Promise.all([
+    db
+      .select({ name: orderItems.name, qty: orderItems.qty })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, order.id)),
+    db
+      .select()
+      .from(deliveries)
+      .where(eq(deliveries.orderId, order.id))
+      .limit(1),
+  ]);
 
   const name = order.customerName?.trim() || "";
   const masked = name ? `${name.slice(0, 3)}***` : "";
@@ -35,5 +42,16 @@ export async function GET(req: NextRequest) {
     customer_name: masked,
     created_at: order.createdAt,
     items,
+    delivery: delivery
+      ? {
+          status: delivery.status,
+          etaMinutes: delivery.etaMinutes,
+          lastLat: delivery.lastLat != null ? Number(delivery.lastLat) : null,
+          lastLng: delivery.lastLng != null ? Number(delivery.lastLng) : null,
+          lastSeenAt: delivery.lastSeenAt,
+          destLat: order.lat != null ? Number(order.lat) : null,
+          destLng: order.lng != null ? Number(order.lng) : null,
+        }
+      : null,
   });
 }
