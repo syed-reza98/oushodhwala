@@ -10,10 +10,17 @@ export type BookDiagnosticsInput = {
   patientName: string;
   phone: string;
   address: string;
+  area?: string;
+  cityZone?: string;
+  thana?: string;
+  district?: string;
+  lat?: number;
+  lng?: number;
   scheduledDate: string;
   slot: string;
   tests: { id: string; bn?: string; en?: string; price: number }[];
   collectionFee: number;
+  discount?: number;
   paymentMethod?: string;
   note?: string;
 };
@@ -24,9 +31,17 @@ export type BookServiceInput = {
   patientName: string;
   phone: string;
   address: string;
+  area?: string;
+  cityZone?: string;
+  thana?: string;
+  district?: string;
+  lat?: number;
+  lng?: number;
   scheduledDate?: string;
   slot?: string;
+  duration?: string;
   fee: number;
+  paymentMethod?: string;
   note?: string;
 };
 
@@ -40,7 +55,8 @@ export async function bookDiagnostics(input: BookDiagnosticsInput) {
 
   const subtotal = input.tests.reduce((a, t) => a + (Number(t.price) || 0), 0);
   const collectionFee = Math.max(0, Number(input.collectionFee) || 0);
-  const total = subtotal + collectionFee;
+  const discount = Math.max(0, Number(input.discount) || 0);
+  const total = Math.max(0, subtotal - discount + collectionFee);
   const id = randomUUID();
   const bookingNo = `HD-${Date.now().toString(36).toUpperCase()}`;
 
@@ -51,10 +67,17 @@ export async function bookDiagnostics(input: BookDiagnosticsInput) {
     patientName: input.patientName.trim(),
     phone: input.phone.trim(),
     address: input.address.trim(),
+    area: input.area?.trim() || "",
+    cityZone: input.cityZone?.trim() || "",
+    thana: input.thana?.trim() || "",
+    district: input.district?.trim() || "",
+    lat: input.lat != null ? String(input.lat) : null,
+    lng: input.lng != null ? String(input.lng) : null,
     scheduledDate: input.scheduledDate || "",
     slot: input.slot || "",
     tests: input.tests,
     subtotal: String(subtotal),
+    discount: String(discount),
     collectionFee: String(collectionFee),
     total: String(total),
     paymentMethod: input.paymentMethod || "cod",
@@ -85,9 +108,18 @@ export async function bookHomeService(input: BookServiceInput) {
     patientName: input.patientName.trim(),
     phone: input.phone.trim(),
     address: input.address.trim(),
+    area: input.area?.trim() || "",
+    cityZone: input.cityZone?.trim() || "",
+    thana: input.thana?.trim() || "",
+    district: input.district?.trim() || "",
+    lat: input.lat != null ? String(input.lat) : null,
+    lng: input.lng != null ? String(input.lng) : null,
     scheduledDate: input.scheduledDate || "",
     slot: input.slot || "",
+    duration: input.duration?.trim() || "",
     fee: String(input.fee ?? 0),
+    paymentMethod: input.paymentMethod || "cod",
+    paymentStatus: "pending",
     status: "requested",
     note: input.note?.trim() || null,
   });

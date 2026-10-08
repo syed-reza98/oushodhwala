@@ -4,7 +4,17 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { auth } from "@/server/auth/config";
 import { db } from "@/server/db";
-import { loyaltyAccounts, loyaltyTransactions, orderEvents, orderItems, orderReturns, orders, prescriptions, products } from "@/server/db/schema";
+import {
+  loyaltyAccounts,
+  loyaltyTransactions,
+  orderEvents,
+  orderItems,
+  orderReturns,
+  orders,
+  prescriptions,
+  products,
+  stockMovements,
+} from "@/server/db/schema";
 
 export type PlaceOrderItem = {
   id: string;
@@ -20,6 +30,7 @@ export type PlaceOrderInput = {
   phone: string;
   address: string;
   area?: string;
+  cityZone?: string;
   thana?: string;
   district?: string;
   lat?: number;
@@ -199,6 +210,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         customerPhone: input.phone,
         deliveryAddress: input.address,
         area: input.area || undefined,
+        cityZone: input.cityZone || undefined,
         thana: input.thana || undefined,
         district: input.district || undefined,
         lat: input.lat != null ? String(input.lat) : undefined,
@@ -325,22 +337,110 @@ export async function countMyOrders() {
 export async function cancelMyOrder(orderNo: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("AUTH_REQUIRED");
+  const userId = session.user.id;
+
   const [row] = await db
     .select()
     .from(orders)
-    .where(and(eq(orders.orderNo, orderNo), eq(orders.userId, session.user.id)))
+    .where(and(eq(orders.orderNo, orderNo), eq(orders.userId, userId)))
     .limit(1);
   if (!row) throw new Error("NOT_FOUND");
   if (["shipped", "delivered", "cancelled"].includes(row.status)) {
     throw new Error("CANNOT_CANCEL");
   }
-  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, row.id));
-  await db.insert(orderEvents).values({
-    id: randomUUID(),
-    orderId: row.id,
-    status: "cancelled",
-    note: "গ্রাহক বাতিল করেছেন",
+
+  await db.transaction(async (tx) => {
+    // 1. Fetch order items and restore product stock
+    const items = await tx
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, row.id));
+
+    for (const item of items) {
+      if (item.productId && item.qty > 0) {
+        await tx
+          .update(products)
+          .set({ stock: sql`${products.stock} + ${item.qty}` })
+          .where(eq(products.id, item.productId));
+
+        const [prod] = await tx
+          .select({ stock: products.stock })
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+
+        await tx.insert(stockMovements).values({
+          id: randomUUID(),
+          productId: item.productId,
+          productName: item.name,
+          change: item.qty,
+          balance: prod?.stock ?? 0,
+          kind: "order_cancel",
+          ref: row.orderNo,
+          note: `অর্ডার বাতিল #${row.orderNo}`,
+          actorId: userId,
+        });
+      }
+    }
+
+    // 2. Revert loyalty points (if redeemed or earned)
+    const meta = (row.meta as { pointsRedeemed?: number; pointsEarned?: number } | null) ?? {};
+    const redeemed = Number(meta.pointsRedeemed) || 0;
+    const earned = Number(meta.pointsEarned) || 0;
+
+    if (redeemed > 0 || earned > 0) {
+      const [acc] = await tx
+        .select()
+        .from(loyaltyAccounts)
+        .where(eq(loyaltyAccounts.userId, userId))
+        .limit(1);
+
+      if (acc) {
+        const netRefund = redeemed - earned;
+        const nextBal = Math.max(0, acc.balance + netRefund);
+        await tx
+          .update(loyaltyAccounts)
+          .set({
+            balance: nextBal,
+            pointsSpent: Math.max(0, acc.pointsSpent - redeemed),
+            pointsEarned: Math.max(0, acc.pointsEarned - earned),
+            tier: nextBal >= 2000 ? "gold" : nextBal >= 500 ? "silver" : "bronze",
+          })
+          .where(eq(loyaltyAccounts.userId, userId));
+
+        if (redeemed > 0) {
+          await tx.insert(loyaltyTransactions).values({
+            id: randomUUID(),
+            userId,
+            points: redeemed,
+            kind: "refund",
+            orderNo: row.orderNo,
+            reason: `অর্ডার বাতিল বাবদ পয়েন্ট ফেরত #${row.orderNo}`,
+          });
+        }
+        if (earned > 0) {
+          await tx.insert(loyaltyTransactions).values({
+            id: randomUUID(),
+            userId,
+            points: -earned,
+            kind: "revoke",
+            orderNo: row.orderNo,
+            reason: `অর্ডার বাতিল বাবদ পয়েন্ট কর্তন #${row.orderNo}`,
+          });
+        }
+      }
+    }
+
+    // 3. Mark order as cancelled and log event
+    await tx.update(orders).set({ status: "cancelled" }).where(eq(orders.id, row.id));
+    await tx.insert(orderEvents).values({
+      id: randomUUID(),
+      orderId: row.id,
+      status: "cancelled",
+      note: "গ্রাহক বাতিল করেছেন (স্টক ফেরত)",
+    });
   });
+
   return { ok: true };
 }
 

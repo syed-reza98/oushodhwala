@@ -12,6 +12,7 @@ export default tseslint.config(
       ".output/**",
       "storage/**",
       "_legacy/**",
+      "oushodhwala-main-legacy/**",
       "playwright-report/**",
       "test-results/**",
     ],

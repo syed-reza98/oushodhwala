@@ -38,12 +38,18 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "invalid id/status" }, { status: 400 });
   }
 
-  await db.update(orders).set({ status: body.status }).where(eq(orders.id, body.id));
-  await db.insert(orderEvents).values({
-    id: randomUUID(),
-    orderId: body.id,
-    status: body.status,
-    note: (body.note ?? "").trim() || NOTE[body.status] || body.status,
+  const orderId = body.id;
+  const status = body.status;
+  const note = (body.note ?? "").trim() || NOTE[status] || status;
+
+  await db.transaction(async (tx) => {
+    await tx.update(orders).set({ status }).where(eq(orders.id, orderId));
+    await tx.insert(orderEvents).values({
+      id: randomUUID(),
+      orderId,
+      status,
+      note,
+    });
   });
   return NextResponse.json({ ok: true });
 }

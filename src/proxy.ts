@@ -1,30 +1,32 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import { auth } from "@/server/auth/config";
-import { hasStaffAccess, type AppRole } from "@/server/auth/roles";
+import { NextResponse } from "next/server";
+import { hasStaffAccess } from "@/server/auth/roles";
 
 /**
- * Next.js 16 request proxy (replaces middleware.ts).
- * Soft-gates /admin for non-staff; client AdminShell still enforces UX.
+ * Next.js 16 proxy convention (replaces legacy middleware).
+ * Edge route protection for administrative routes before client bundles are served.
  */
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (!pathname.startsWith("/admin")) {
-    return NextResponse.next();
-  }
+export const proxy = auth((req) => {
+  const { pathname } = req.nextUrl;
+  const isLoggedIn = !!req.auth;
+  const userRoles = req.auth?.user?.roles ?? [];
 
-  const session = await auth();
-  const roles = (session?.user?.roles ?? []) as AppRole[];
-  if (!session?.user?.id || !hasStaffAccess(roles)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth";
-    url.searchParams.set("callbackUrl", pathname);
-    return NextResponse.redirect(url);
+  if (pathname.startsWith("/admin")) {
+    if (!isLoggedIn) {
+      const url = new URL("/auth", req.url);
+      url.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(url);
+    }
+    if (!hasStaffAccess(userRoles)) {
+      return NextResponse.redirect(new URL("/?error=unauthorized", req.url));
+    }
   }
 
   return NextResponse.next();
-}
+});
+
+export default proxy;
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  matcher: ["/admin/:path*"],
 };

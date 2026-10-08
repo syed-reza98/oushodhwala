@@ -163,6 +163,10 @@ export async function GET(req: NextRequest) {
         podPhotoUrl: d.podPhotoUrl ?? deliveryMeta?.podPhotoUrl ?? null,
         podSignatureUrl: d.podSignatureUrl ?? deliveryMeta?.podSignatureUrl ?? null,
         podReceiverName: d.podReceiverName ?? deliveryMeta?.podReceiverName ?? null,
+        publicToken: d.publicToken ?? null,
+        tokenExpiresAt: d.tokenExpiresAt ?? null,
+        tokenRevoked: d.tokenRevoked ?? false,
+        tokenScope: d.tokenScope ?? "track",
         lastEvent: last
           ? { status: last.status, note: last.note, createdAt: last.createdAt }
           : null,
@@ -263,7 +267,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = (await req.json()) as {
-    action?: "assign" | "toggle_rider" | "status";
+    action?: "assign" | "toggle_rider" | "status" | "rotate_token" | "revoke_token";
     orderId?: string;
     riderId?: string;
     etaMinutes?: number;
@@ -277,6 +281,31 @@ export async function PATCH(req: NextRequest) {
     podSignatureUrl?: string;
     podReceiverName?: string;
   };
+
+  if (body.action === "rotate_token" && body.deliveryId) {
+    const freshToken = randomUUID();
+    const expiry = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 23).replace("T", " ");
+    const [d] = await db.select().from(deliveries).where(eq(deliveries.id, body.deliveryId)).limit(1);
+    if (!d) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    await db.transaction(async (tx) => {
+      await tx
+        .update(deliveries)
+        .set({ publicToken: freshToken, tokenExpiresAt: expiry, tokenRevoked: false })
+        .where(eq(deliveries.id, d.id));
+      if (d.orderId) {
+        await tx.update(orders).set({ publicToken: freshToken }).where(eq(orders.id, d.orderId));
+      }
+    });
+    return NextResponse.json({ ok: true, publicToken: freshToken, tokenExpiresAt: expiry });
+  }
+
+  if (body.action === "revoke_token" && body.deliveryId) {
+    await db
+      .update(deliveries)
+      .set({ tokenRevoked: true })
+      .where(eq(deliveries.id, body.deliveryId));
+    return NextResponse.json({ ok: true });
+  }
 
   if (body.action === "toggle_rider" && body.id) {
     await db.update(riders).set({ active: !!body.active }).where(eq(riders.id, body.id));
@@ -396,53 +425,68 @@ export async function PATCH(req: NextRequest) {
     .where(eq(deliveries.orderId, order.id))
     .limit(1);
 
+  const defaultExpiry = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 23).replace("T", " ");
   let deliveryId = existing?.id;
   const initialOtp = String(Math.floor(1000 + Math.random() * 9000));
-  if (existing) {
-    const existingMeta = (existing.note && existing.note.startsWith("{") ? JSON.parse(existing.note) : {}) as Record<string, unknown>;
-    const otpToUse = existing.otp || (existingMeta.otp as string) || initialOtp;
-    existingMeta.otp = otpToUse;
 
-    await db
-      .update(deliveries)
-      .set({
+  await db.transaction(async (tx) => {
+    if (existing) {
+      const existingMeta = (existing.note && existing.note.startsWith("{") ? JSON.parse(existing.note) : {}) as Record<string, unknown>;
+      const otpToUse = existing.otp || (existingMeta.otp as string) || initialOtp;
+      existingMeta.otp = otpToUse;
+
+      await tx
+        .update(deliveries)
+        .set({
+          riderId: rider.id,
+          status: "assigned",
+          etaMinutes: body.etaMinutes ?? 45,
+          assignedAt: now,
+          orderNo: order.orderNo,
+          otp: otpToUse,
+          publicToken: existing.publicToken || order.publicToken || randomUUID(),
+          tokenExpiresAt: existing.tokenExpiresAt || defaultExpiry,
+          tokenRevoked: false,
+          tokenScope: existing.tokenScope || "track",
+          note: JSON.stringify(existingMeta),
+        })
+        .where(eq(deliveries.id, existing.id));
+    } else {
+      deliveryId = randomUUID();
+      await tx.insert(deliveries).values({
+        id: deliveryId,
+        orderId: order.id,
+        orderNo: order.orderNo,
+        userId: order.userId,
         riderId: rider.id,
         status: "assigned",
         etaMinutes: body.etaMinutes ?? 45,
         assignedAt: now,
-        orderNo: order.orderNo,
-        otp: otpToUse,
-        note: JSON.stringify(existingMeta),
-      })
-      .where(eq(deliveries.id, existing.id));
-  } else {
-    deliveryId = randomUUID();
-    await db.insert(deliveries).values({
-      id: deliveryId,
-      orderId: order.id,
-      orderNo: order.orderNo,
-      userId: order.userId,
-      riderId: rider.id,
-      status: "assigned",
-      etaMinutes: body.etaMinutes ?? 45,
-      assignedAt: now,
-      otp: initialOtp,
-      note: JSON.stringify({ otp: initialOtp }),
-    });
-  }
+        otp: initialOtp,
+        publicToken: order.publicToken || randomUUID(),
+        tokenExpiresAt: defaultExpiry,
+        tokenRevoked: false,
+        tokenScope: "track",
+        note: JSON.stringify({ otp: initialOtp }),
+      });
+    }
 
-  await logEvent({
-    deliveryId: deliveryId!,
-    status: "assigned",
-    note: `${rider.name} অ্যাসাইন`,
-    actor: "staff",
-  });
-  await db.update(orders).set({ status: "shipped" }).where(eq(orders.id, order.id));
-  await db.insert(orderEvents).values({
-    id: randomUUID(),
-    orderId: order.id,
-    status: "shipped",
-    note: "ডেলিভারিম্যান অ্যাসাইন",
+    await tx.insert(deliveryEvents).values({
+      id: randomUUID(),
+      deliveryId: deliveryId!,
+      status: "assigned",
+      note: `${rider.name} অ্যাসাইন`,
+      actor: "staff",
+    });
+
+    await tx.update(orders).set({ status: "shipped" }).where(eq(orders.id, order.id));
+
+    await tx.insert(orderEvents).values({
+      id: randomUUID(),
+      orderId: order.id,
+      status: "shipped",
+      note: "ডেলিভারিম্যান অ্যাসাইন",
+    });
   });
 
   return NextResponse.json({ ok: true, id: deliveryId });

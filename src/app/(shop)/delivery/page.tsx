@@ -70,7 +70,9 @@ export default function DeliveryPage() {
                 lng: longitude,
               }),
             });
-          } catch {}
+          } catch {
+            /* ignore background ping failure */
+          }
         }
       },
       (err) => {

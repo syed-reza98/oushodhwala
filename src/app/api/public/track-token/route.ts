@@ -29,6 +29,14 @@ export async function GET(req: NextRequest) {
       .limit(1),
   ]);
 
+  if (delivery?.tokenRevoked) {
+    return NextResponse.json({ found: false, reason: "revoked" });
+  }
+
+  if (delivery?.tokenExpiresAt && new Date(delivery.tokenExpiresAt).getTime() < Date.now()) {
+    return NextResponse.json({ found: false, reason: "expired" });
+  }
+
   const name = order.customerName?.trim() || "";
   const masked = name ? `${name.slice(0, 3)}***` : "";
 

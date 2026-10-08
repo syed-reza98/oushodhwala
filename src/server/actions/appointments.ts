@@ -110,3 +110,29 @@ export async function listMyAppointments() {
     status: a.status,
   }));
 }
+
+export async function cancelAppointment(appointmentId: string, reason?: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("AUTH_REQUIRED");
+
+  const [row] = await db
+    .select()
+    .from(appointments)
+    .where(and(eq(appointments.id, appointmentId), eq(appointments.userId, session.user.id)))
+    .limit(1);
+
+  if (!row) throw new Error("NOT_FOUND");
+  if (row.status === "cancelled") return { ok: true };
+
+  const now = new Date().toISOString().slice(0, 23).replace("T", " ");
+  await db
+    .update(appointments)
+    .set({
+      status: "cancelled",
+      cancelReason: (reason ?? "রোগী কর্তৃক বাতিল").trim(),
+      cancelledAt: now,
+    })
+    .where(eq(appointments.id, row.id));
+
+  return { ok: true };
+}

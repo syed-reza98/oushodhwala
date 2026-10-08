@@ -26,13 +26,26 @@ export async function GET() {
       patientName: b.patientName,
       phone: b.phone,
       address: b.address,
+      area: b.area,
+      cityZone: b.cityZone,
+      thana: b.thana,
+      district: b.district,
+      lat: b.lat != null ? Number(b.lat) : null,
+      lng: b.lng != null ? Number(b.lng) : null,
       scheduledDate: b.scheduledDate,
       slot: b.slot,
       tests: b.tests,
+      subtotal: Number(b.subtotal),
+      discount: Number(b.discount),
+      collectionFee: Number(b.collectionFee),
       total: Number(b.total),
+      paymentMethod: b.paymentMethod,
+      paymentStatus: b.paymentStatus,
       status: b.status,
       collectorName: b.collectorName,
+      collectorPhone: b.collectorPhone,
       reportUrl: b.reportUrl,
+      note: b.note,
       createdAt: b.createdAt,
     })),
     services: services.map((s) => ({
@@ -42,10 +55,24 @@ export async function GET() {
       serviceSlug: s.serviceSlug,
       patientName: s.patientName,
       phone: s.phone,
-      fee: Number(s.fee),
-      status: s.status,
+      address: s.address,
+      area: s.area,
+      cityZone: s.cityZone,
+      thana: s.thana,
+      district: s.district,
+      lat: s.lat != null ? Number(s.lat) : null,
+      lng: s.lng != null ? Number(s.lng) : null,
       scheduledDate: s.scheduledDate,
       slot: s.slot,
+      duration: s.duration,
+      fee: Number(s.fee),
+      paymentMethod: s.paymentMethod,
+      paymentStatus: s.paymentStatus,
+      status: s.status,
+      assigneeName: s.assigneeName,
+      assigneePhone: s.assigneePhone,
+      note: s.note,
+      adminNote: s.adminNote,
       createdAt: s.createdAt,
     })),
   });
@@ -64,7 +91,13 @@ export async function PATCH(req: NextRequest) {
     id?: string;
     status?: string;
     collectorName?: string;
+    collectorPhone?: string;
     reportUrl?: string;
+    assigneeName?: string;
+    assigneePhone?: string;
+    duration?: string;
+    adminNote?: string;
+    paymentStatus?: string;
   };
   if (!body.id || !body.kind) {
     return NextResponse.json({ error: "kind and id required" }, { status: 400 });
@@ -74,7 +107,9 @@ export async function PATCH(req: NextRequest) {
     const patch: Partial<typeof diagnosticBookings.$inferInsert> = {};
     if (body.status) patch.status = body.status;
     if (body.collectorName != null) patch.collectorName = body.collectorName;
+    if (body.collectorPhone != null) patch.collectorPhone = body.collectorPhone;
     if (body.reportUrl != null) patch.reportUrl = body.reportUrl;
+    if (body.paymentStatus != null) patch.paymentStatus = body.paymentStatus;
     await db.update(diagnosticBookings).set(patch).where(eq(diagnosticBookings.id, body.id));
     return NextResponse.json({ ok: true });
   }
@@ -82,6 +117,11 @@ export async function PATCH(req: NextRequest) {
   if (body.kind === "service") {
     const patch: Partial<typeof serviceRequests.$inferInsert> = {};
     if (body.status) patch.status = body.status;
+    if (body.assigneeName != null) patch.assigneeName = body.assigneeName;
+    if (body.assigneePhone != null) patch.assigneePhone = body.assigneePhone;
+    if (body.duration != null) patch.duration = body.duration;
+    if (body.adminNote != null) patch.adminNote = body.adminNote;
+    if (body.paymentStatus != null) patch.paymentStatus = body.paymentStatus;
     await db.update(serviceRequests).set(patch).where(eq(serviceRequests.id, body.id));
     return NextResponse.json({ ok: true });
   }

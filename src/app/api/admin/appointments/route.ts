@@ -37,6 +37,10 @@ export async function GET() {
       paymentStatus: a.paymentStatus,
       status: a.status,
       joinUrl: a.joinUrl,
+      cancelReason: a.cancelReason,
+      cancelledAt: a.cancelledAt,
+      refundStatus: a.refundStatus,
+      refundAmount: Number(a.refundAmount),
       reminderSentAt: a.reminderSentAt,
     })),
   });
@@ -50,11 +54,38 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: msg === "FORBIDDEN" ? 403 : 401 });
   }
 
-  const body = (await req.json()) as { id?: string; status?: string };
-  if (!body.id || !body.status || !ALLOWED.has(body.status)) {
-    return NextResponse.json({ error: "invalid id/status" }, { status: 400 });
+  const body = (await req.json()) as {
+    id?: string;
+    status?: string;
+    refundStatus?: string;
+    refundAmount?: number;
+    cancelReason?: string;
+    joinUrl?: string;
+  };
+  if (!body.id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  await db.update(appointments).set({ status: body.status }).where(eq(appointments.id, body.id));
+  const patch: Partial<typeof appointments.$inferInsert> = {};
+  if (body.status && ALLOWED.has(body.status)) {
+    patch.status = body.status;
+    if (body.status === "cancelled") {
+      patch.cancelledAt = new Date().toISOString().slice(0, 23).replace("T", " ");
+    }
+  }
+  if (body.refundStatus != null) {
+    patch.refundStatus = body.refundStatus;
+  }
+  if (body.refundAmount != null) {
+    patch.refundAmount = String(body.refundAmount);
+  }
+  if (body.cancelReason != null) {
+    patch.cancelReason = body.cancelReason;
+  }
+  if (body.joinUrl != null) {
+    patch.joinUrl = body.joinUrl;
+  }
+
+  await db.update(appointments).set(patch).where(eq(appointments.id, body.id));
   return NextResponse.json({ ok: true });
 }
