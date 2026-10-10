@@ -8,9 +8,11 @@ import { toast } from "sonner";
 import { useStore } from "@/lib/store";
 import { useCatalog, catalogQueryKey, deliveryChargeFor } from "@/lib/catalog-db";
 import { useAuth } from "@/hooks/useAuth";
+import { Printer } from "lucide-react";
 import { placeOrder } from "@/server/actions/orders";
 import { getGuestToken } from "@/lib/rx-guest";
 import { useT } from "@/lib/i18n";
+import { printInvoice, type InvoiceOrder } from "@/lib/invoice";
 
 const ALL_PAYMENTS = [
   { id: "cod", t: "ক্যাশ অন ডেলিভারি", tEn: "Cash on delivery", d: "পণ্য হাতে পেয়ে টাকা দিন", dEn: "Pay when you receive the product", e: "💵", key: "cod" as const },
@@ -53,6 +55,7 @@ export default function CheckoutClient() {
   const [form, setForm] = useState({ label: "", area: "", details: "", phone: "" });
   const [showForm, setShowForm] = useState(false);
   const [placed, setPlaced] = useState<string | null>(null);
+  const [placedOrder, setPlacedOrder] = useState<InvoiceOrder | null>(null);
 
   const loyaltyQ = useQuery({
     queryKey: ["my-loyalty"],
@@ -151,6 +154,24 @@ export default function CheckoutClient() {
         return;
       }
 
+      const invoiceSnapshot: InvoiceOrder = {
+        order_no: res.order_no,
+        created_at: new Date().toISOString(),
+        customer_name: profile?.name || user?.email || (form.label ? form.label : t("গ্রাহক", "Customer")),
+        phone: addr.phone,
+        address: `${addr.label} · ${addr.area} — ${addr.details}${note.trim() ? ` (${note.trim()})` : ""}`,
+        slot: effectiveSlot,
+        subtotal,
+        delivery_fee: delivery,
+        discount: couponCut + pointCut,
+        total,
+        payment_method: method,
+        payment_status: method === "cod" ? "pending" : "paid",
+        payment_ref: ref,
+        items: cart.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+      };
+
+      setPlacedOrder(invoiceSnapshot);
       clear();
       setCouponCode(null);
       setAttachedPrescriptionId(null);
@@ -166,22 +187,61 @@ export default function CheckoutClient() {
     }
   };
 
+  const handlePrintPlacedInvoice = () => {
+    if (!placedOrder) return;
+    printInvoice(placedOrder, {
+      en: t.en,
+      money: t.money,
+      n: t.n,
+    });
+  };
+
   if (placed) {
     return (
-      <div className="pt-16 text-center">
+      <div className="pt-16 text-center max-w-md mx-auto px-4">
         <p className="text-4xl">✅</p>
         <h1 className="mt-3 text-lg font-bold">{t("অর্ডার সফল হয়েছে!", "Order placed successfully!")}</h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          {t("অর্ডার নম্বর:", "Order number:")} {placed}
+          {t("অর্ডার নম্বর:", "Order number:")} <span className="font-bold text-foreground">#{placed}</span>
         </p>
-        <div className="mt-4 flex justify-center gap-2">
+
+        {placedOrder && (
+          <div className="mt-4 rounded-xl border border-border bg-card p-3 text-left text-xs">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <span className="font-semibold text-muted-foreground">{t("পেমেন্ট মাধ্যম", "Payment method")}</span>
+              <span className="font-bold uppercase text-foreground">{placedOrder.payment_method}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-border">
+              <span className="font-semibold text-muted-foreground">{t("মোট প্রদেয়", "Total payable")}</span>
+              <span className="font-extrabold text-primary">{t.money(placedOrder.total)}</span>
+            </div>
+            <div className="pt-2 text-[11px] text-muted-foreground truncate">
+              {t("ডেলিভারি ঠিকানা:", "Delivery address:")} {placedOrder.address}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+          {placedOrder && (
+            <button
+              type="button"
+              onClick={handlePrintPlacedInvoice}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-xs font-semibold text-foreground hover:bg-secondary transition shadow-2xs"
+            >
+              <Printer className="h-3.5 w-3.5 text-primary" />
+              {t("ইনভয়েস / রশিদ প্রিন্ট", "Print Invoice")}
+            </button>
+          )}
           <Link
-            href="/orders"
-            className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
+            href={`/track/${encodeURIComponent(placed)}`}
+            className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition"
           >
             {t("অর্ডার ট্র্যাক করুন", "Track order")}
           </Link>
-          <Link href="/" className="rounded-lg border border-border px-4 py-2 text-xs font-semibold">
+          <Link
+            href="/"
+            className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg border border-border px-4 py-2 text-xs font-semibold hover:bg-secondary transition"
+          >
             {t("হোমে ফিরুন", "Back to home")}
           </Link>
         </div>
