@@ -9,8 +9,10 @@ import {
   extractRxFromImageAndNote,
   checkRxInteractions,
   type RxExtractedData,
+  type RxExtractedItem,
   type DrugInteractionResult,
 } from "@/server/ai/gateway";
+import { matchPrescriptionMedicines } from "./prescription-matcher";
 
 export async function createPrescription(input: {
   filePaths: string[];
@@ -112,13 +114,32 @@ export async function listMyPrescriptions(guestToken?: string) {
             }
           })()
         : [];
+
+    const ocrObj =
+      typeof r.ocrJson === "string"
+        ? (() => {
+            try {
+              return JSON.parse(r.ocrJson);
+            } catch {
+              return null;
+            }
+          })()
+        : r.ocrJson;
+    const parsedData = (ocrObj && typeof ocrObj === "object" && "data" in ocrObj
+      ? (ocrObj as { data?: { items?: unknown[] } }).data
+      : (ocrObj as { items?: unknown[] })) || null;
+    const medicinesCount = Array.isArray(parsedData?.items) ? parsedData.items.length : 0;
+
     return {
       id: r.id,
       status: r.status,
       phone: r.phone,
       note: r.note,
+      adminNote: r.adminNote,
       filePaths,
       createdAt: r.createdAt,
+      parsedAt: r.parsedAt,
+      medicinesCount,
     };
   });
 }
@@ -280,4 +301,176 @@ export async function analyzeDrugInteractions(
   meds: Array<{ name: string; generic?: string; strength?: string }>,
 ): Promise<DrugInteractionResult> {
   return checkRxInteractions(meds);
+}
+
+/**
+ * Fast re-order for prescription lines without reviewing
+ */
+export async function quickReorderRx(id: string, guestToken?: string) {
+  const row = await getPrescriptionById(id, guestToken);
+  if (!row) throw new Error("PRESCRIPTION_NOT_FOUND");
+
+  const rawOcr = row.ocrJson;
+  const ocrObj =
+    typeof rawOcr === "string"
+      ? (() => {
+          try {
+            return JSON.parse(rawOcr);
+          } catch {
+            return null;
+          }
+        })()
+      : rawOcr;
+  const parsed =
+    (ocrObj && typeof ocrObj === "object"
+      ? (("data" in ocrObj
+          ? (ocrObj as { data?: RxExtractedData }).data
+          : ocrObj) as RxExtractedData)
+      : null) || null;
+
+  if (!parsed || !parsed.items || parsed.items.length === 0) {
+    throw new Error("NO_MEDICINES_FOUND");
+  }
+
+  const matches = await matchPrescriptionMedicines(parsed.items);
+  const lines: Array<{
+    id: string;
+    name: string;
+    price: number;
+    mrp?: number;
+    qty: number;
+  }> = [];
+  const missing: Array<{ name: string }> = [];
+
+  for (const m of matches) {
+    if (m.matchedProduct) {
+      lines.push({
+        id: m.matchedProduct.id,
+        name: m.matchedProduct.name,
+        price: m.matchedProduct.price,
+        mrp: m.matchedProduct.mrp,
+        qty: m.calculatedQty || 1,
+      });
+    } else {
+      missing.push({ name: m.extractedName });
+    }
+  }
+
+  return { lines, missing };
+}
+
+/**
+ * Save user verification edits and audit trail to prescription
+ */
+export async function savePrescriptionEdits(
+  id: string,
+  payload: {
+    meta?: {
+      hospital?: string;
+      doctorName?: string;
+      doctorQualification?: string;
+      patientName?: string;
+      patientAge?: string;
+      patientAddress?: string;
+      date?: string;
+      advice?: string;
+    };
+    items?: RxExtractedItem[];
+    changes?: Array<{
+      line: number;
+      medicine: string;
+      field: string;
+      from: string;
+      to: string;
+    }>;
+  },
+  guestToken?: string,
+) {
+  const session = await auth();
+  const [row] = await db.select().from(prescriptions).where(eq(prescriptions.id, id)).limit(1);
+  if (!row) throw new Error("NOT_FOUND");
+
+  const isOwner = session?.user?.id && row.userId === session.user.id;
+  const isGuestMatch = guestToken && row.guestToken === guestToken.trim();
+  const roles = session?.user?.roles ?? [];
+  const isStaff = roles.some((r) =>
+    ["super_admin", "admin", "pharmacist", "support_agent"].includes(r),
+  );
+
+  if (!isOwner && !isGuestMatch && !isStaff) throw new Error("FORBIDDEN");
+
+  const rawOcr = row.ocrJson;
+  const currentJson =
+    (typeof rawOcr === "string"
+      ? (() => {
+          try {
+            return JSON.parse(rawOcr);
+          } catch {
+            return {};
+          }
+        })()
+      : rawOcr) as Record<string, unknown> || {};
+  const currentData = ((currentJson.data || currentJson) as Record<string, unknown>) || {};
+
+  const updatedData: RxExtractedData = {
+    hospital:
+      payload.meta?.hospital !== undefined
+        ? payload.meta.hospital
+        : (currentData.hospital as string),
+    doctorName:
+      payload.meta?.doctorName !== undefined
+        ? payload.meta.doctorName
+        : (currentData.doctorName as string),
+    doctorQualification:
+      payload.meta?.doctorQualification !== undefined
+        ? payload.meta.doctorQualification
+        : (currentData.doctorQualification as string),
+    patientName:
+      payload.meta?.patientName !== undefined
+        ? payload.meta.patientName
+        : (currentData.patientName as string),
+    patientAge:
+      payload.meta?.patientAge !== undefined
+        ? payload.meta.patientAge
+        : (currentData.patientAge as string),
+    patientAddress:
+      payload.meta?.patientAddress !== undefined
+        ? payload.meta.patientAddress
+        : (currentData.patientAddress as string),
+    date: payload.meta?.date !== undefined ? payload.meta.date : (currentData.date as string),
+    advice:
+      payload.meta?.advice !== undefined
+        ? payload.meta.advice
+        : (currentData.advice as string),
+    items: payload.items || (currentData.items as RxExtractedItem[]) || [],
+  };
+
+  const auditHistory = Array.isArray(currentJson.auditHistory) ? [...currentJson.auditHistory] : [];
+  if (payload.changes && payload.changes.length > 0) {
+    auditHistory.unshift({
+      id: randomUUID(),
+      action: "verify_save",
+      createdAt: new Date().toISOString(),
+      version: auditHistory.length + 1,
+      snapshot: { ...updatedData },
+      changes: payload.changes,
+    });
+  }
+
+  const newOcrJson = {
+    ...currentJson,
+    source: currentJson.source || "user-verified",
+    data: updatedData,
+    auditHistory,
+  };
+
+  await db
+    .update(prescriptions)
+    .set({
+      ocrJson: newOcrJson,
+      parsedAt: row.parsedAt || new Date().toISOString().slice(0, 23).replace("T", " "),
+    })
+    .where(eq(prescriptions.id, id));
+
+  return { success: true, updatedData, auditHistory };
 }
