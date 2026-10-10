@@ -25,6 +25,8 @@ export function MedicinePicker({
   genericHint,
   placeholder,
   className = "",
+  error = false,
+  inputClassName = "",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -32,6 +34,8 @@ export function MedicinePicker({
   genericHint?: string;
   placeholder?: string;
   className?: string;
+  error?: boolean;
+  inputClassName?: string;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -61,7 +65,7 @@ export function MedicinePicker({
   // Search when typing
   useEffect(() => {
     const q = term.trim();
-    if (!open || q.length < 2) {
+    if (!open || q.length < 1) {
       setResults([]);
       return;
     }
@@ -118,7 +122,11 @@ export function MedicinePicker({
             setShowAlternatives(false);
           }}
           placeholder={placeholder || t("ঔষধ খুঁজুন...", "Search medicine...")}
-          className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-hidden pr-14"
+          className={`w-full rounded-lg border px-2.5 py-1.5 text-xs text-foreground focus:border-primary focus:outline-hidden pr-14 ${
+            error
+              ? "border-destructive text-destructive bg-destructive/5"
+              : "border-border bg-card"
+          } ${inputClassName}`}
         />
 
         <div className="absolute right-1.5 flex items-center gap-1">

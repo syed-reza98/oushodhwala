@@ -839,15 +839,14 @@ export default function PrescriptionReadingPage() {
                           <span className="text-[10px] font-semibold text-muted-foreground">
                             {t("ঔষধের নাম", "Medicine Name")} *
                           </span>
-                          <input
+                          <MedicinePicker
                             value={item.name}
-                            onChange={(e) => patchItem(i, { name: e.target.value })}
-                            placeholder={t("যেমন: Napa 500mg", "e.g. Napa 500mg")}
-                            className={`w-full rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none ${
-                              showErrors && errors.items[`${i}.name`]
-                                ? "border-destructive text-destructive"
-                                : "border-border bg-background"
-                            }`}
+                            onChange={(v) => patchItem(i, { name: v })}
+                            onPick={(p) => pickProduct(i, p)}
+                            genericHint={item.generic}
+                            placeholder={t("যেমন: Napa 500mg (টাইপ করুন)", "e.g. Napa 500mg (type to search)")}
+                            error={!!(showErrors && errors.items[`${i}.name`])}
+                            inputClassName="font-semibold"
                           />
                         </div>
                         <div>
