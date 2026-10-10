@@ -771,18 +771,18 @@ export default function PrescriptionReadingPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={exportPdf}
+                    className="rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold hover:bg-secondary transition"
+                  >
+                    {t("প্রিন্ট / PDF", "Print / PDF")}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => void persist(false)}
                     disabled={autoSaving}
                     className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition disabled:opacity-50"
                   >
-                    {t("সংরক্ষণ করুন", "Save")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportPdf}
-                    className="rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold hover:bg-secondary transition"
-                  >
-                    {t("প্রিন্ট", "Print")}
+                    {t("সেভ / আপডেট", "Save / Update")}
                   </button>
                 </div>
               </div>
