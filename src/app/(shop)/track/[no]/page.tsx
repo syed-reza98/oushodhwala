@@ -157,7 +157,7 @@ export default function TrackPage() {
         )}
       </div>
 
-      {loading && <p className="mt-6 text-xs text-muted-foreground">{t("লোড হচ্ছে...", "Loading...")}</p>}
+      {loading && !data && <p className="mt-6 text-xs text-muted-foreground">{t("লোড হচ্ছে...", "Loading...")}</p>}
       {err && <p className="mt-6 text-xs font-semibold text-destructive">{err}</p>}
 
       {data && (
