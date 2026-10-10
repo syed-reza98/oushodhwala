@@ -114,7 +114,9 @@ export function invoiceHtml(o: InvoiceOrder, f: InvoiceFormat): string {
     ${L("প্রিন্ট / PDF সেভ", "Print / Save PDF")}
   </button>
 </p>
-</div></body></html>`;
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>
+</body></html>`;
 }
 
 export function printInvoice(o: InvoiceOrder, f: InvoiceFormat) {

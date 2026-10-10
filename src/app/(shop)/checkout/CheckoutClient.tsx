@@ -55,6 +55,7 @@ export default function CheckoutClient() {
   const [form, setForm] = useState({ label: "", area: "", details: "", phone: "" });
   const [showForm, setShowForm] = useState(false);
   const [placed, setPlaced] = useState<string | null>(null);
+  const [placedToken, setPlacedToken] = useState<string | null>(null);
   const [placedOrder, setPlacedOrder] = useState<InvoiceOrder | null>(null);
 
   const loyaltyQ = useQuery({
@@ -179,6 +180,7 @@ export default function CheckoutClient() {
       void qc.invalidateQueries({ queryKey: ["my-orders"] });
       void qc.invalidateQueries({ queryKey: ["my-loyalty"] });
       setPlaced(res.order_no);
+      setPlacedToken(res.public_token || null);
     } catch (e) {
       console.error("Order submit exception:", e);
       toast.error(t("অর্ডার সম্পন্ন হয়নি, আবার চেষ্টা করুন", "Could not complete order, please try again"));
@@ -233,7 +235,7 @@ export default function CheckoutClient() {
             </button>
           )}
           <Link
-            href={`/track/${encodeURIComponent(placed)}`}
+            href={placedToken ? `/track/${encodeURIComponent(placed)}?token=${encodeURIComponent(placedToken)}` : `/track/${encodeURIComponent(placed)}`}
             className="w-full sm:w-auto inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition"
           >
             {t("অর্ডার ট্র্যাক করুন", "Track order")}

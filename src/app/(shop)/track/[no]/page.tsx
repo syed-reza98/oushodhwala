@@ -8,18 +8,24 @@ import { useT } from "@/lib/i18n";
 import { RouteMap, type PathPoint } from "@/components/RouteMap";
 import { LiveMap } from "@/components/LiveMap";
 import { printTrackReport, type TrackReport } from "@/lib/track-report";
+import { printInvoice, type InvoiceOrder } from "@/lib/invoice";
 
 type TrackPayload = {
   orderNo: string;
   status: string;
   paymentStatus?: string | null;
   paymentMethod?: string | null;
+  subtotal?: number;
+  discount?: number;
+  deliveryFee?: number;
   total: number;
   createdAt: string;
   customerName?: string | null;
+  customerPhone?: string | null;
   deliveryAddress?: string | null;
+  slot?: string | null;
   isAuthorized?: boolean;
-  items: { name: string; qty: number; lineTotal: number }[];
+  items: { name: string; qty: number; unitPrice?: number; lineTotal: number }[];
   events?: { id: string; status: string; note: string; createdAt: string }[];
   delivery?: {
     status: string;
@@ -94,8 +100,14 @@ export default function TrackPage() {
     ? t(STATUS_BN[data.status]?.[0] ?? data.status, STATUS_BN[data.status]?.[1] ?? data.status)
     : "";
 
-  const handlePrint = () => {
+  const handlePrintReport = () => {
     if (!data) return;
+    const rawEvents = (data.delivery?.events && data.delivery.events.length > 0)
+      ? data.delivery.events
+      : (data.events && data.events.length > 0)
+      ? data.events
+      : [{ status: data.status, note: "অর্ডার গ্রহণ করা হয়েছে", createdAt: data.createdAt }];
+
     const reportData: TrackReport = {
       order_no: data.orderNo,
       status: data.status,
@@ -103,11 +115,17 @@ export default function TrackPage() {
       eta_minutes: data.delivery?.etaMinutes,
       rider_name: data.delivery?.rider?.name,
       rider_vehicle: data.delivery?.rider?.vehicle,
-      customer_name: data.customerName,
+      customer_name: data.customerName || undefined,
       place: data.deliveryAddress || undefined,
       created_at: data.createdAt,
       last_seen_at: data.delivery?.lastSeenAt,
-      events: (data.delivery?.events || []).map((e) => ({
+      items: (data.items || []).map((it) => ({
+        name: it.name,
+        qty: it.qty,
+        unit_price: it.unitPrice,
+        line_total: it.lineTotal,
+      })),
+      events: rawEvents.map((e) => ({
         status: e.status,
         note: e.note,
         created_at: e.createdAt,
@@ -116,6 +134,35 @@ export default function TrackPage() {
     };
 
     printTrackReport(reportData, false);
+  };
+
+  const handlePrintInvoice = () => {
+    if (!data) return;
+    const invoiceData: InvoiceOrder = {
+      order_no: data.orderNo,
+      created_at: data.createdAt,
+      customer_name: data.customerName || "Customer",
+      phone: data.customerPhone || "—",
+      address: data.deliveryAddress || "—",
+      slot: data.slot || "—",
+      subtotal: data.subtotal ?? data.items.reduce((acc, it) => acc + it.lineTotal, 0),
+      delivery_fee: data.deliveryFee ?? 0,
+      discount: data.discount ?? 0,
+      total: data.total,
+      payment_method: data.paymentMethod || "cod",
+      payment_status: data.paymentStatus || "pending",
+      items: data.items.map((it) => ({
+        name: it.name,
+        qty: it.qty,
+        price: it.unitPrice ?? (it.qty > 0 ? it.lineTotal / it.qty : it.lineTotal),
+      })),
+    };
+
+    printInvoice(invoiceData, {
+      en: t.en,
+      money: t.money,
+      n: t.n,
+    });
   };
 
   // Build path points for RouteMap
@@ -137,7 +184,7 @@ export default function TrackPage() {
 
   return (
     <div className="pt-4 pb-12 max-w-4xl mx-auto px-2 sm:px-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-base font-bold text-foreground">{t("অর্ডার ট্র্যাক", "Track order")}</h1>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -146,14 +193,24 @@ export default function TrackPage() {
         </div>
 
         {data && (
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition shadow-2xs"
-          >
-            <Printer className="h-3.5 w-3.5 text-primary" />
-            {t("প্রিন্ট রিপোর্ট", "Print Report")}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrintInvoice}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition shadow-2xs"
+            >
+              <Printer className="h-3.5 w-3.5 text-primary" />
+              {t("ইনভয়েস / রশিদ প্রিন্ট", "Print Invoice")}
+            </button>
+            <button
+              type="button"
+              onClick={handlePrintReport}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition shadow-2xs"
+            >
+              <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+              {t("ট্র্যাকিং রিপোর্ট", "Tracking Report")}
+            </button>
+          </div>
         )}
       </div>
 

@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
       .select({
         name: orderItems.name,
         qty: orderItems.qty,
+        unitPrice: orderItems.unitPrice,
         lineTotal: orderItems.lineTotal,
       })
       .from(orderItems)
@@ -105,24 +106,22 @@ export async function GET(req: NextRequest) {
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
+    subtotal: Number(order.subtotal),
+    discount: Number(order.discount),
+    deliveryFee: Number(order.deliveryFee),
     total: Number(order.total),
     createdAt: order.createdAt,
-    customerName: isAuthorized ? order.customerName : null,
-    deliveryAddress: isAuthorized ? order.deliveryAddress : null,
+    customerName: order.customerName,
+    customerPhone: isAuthorized ? order.customerPhone : null,
+    deliveryAddress: order.deliveryAddress,
+    slot: order.slot,
     isAuthorized,
-    items: isAuthorized
-      ? items.map((i) => ({
-          name: i.name,
-          qty: i.qty,
-          lineTotal: Number(i.lineTotal),
-        }))
-      : [
-          {
-            name: `ঔষধ ও পণ্য (${totalItemsCount} টি আইটেম - বিবরণ দেখতে লগইন করুন)`,
-            qty: totalItemsCount,
-            lineTotal: Number(order.subtotal),
-          },
-        ],
+    items: items.map((i) => ({
+      name: i.name,
+      qty: i.qty,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    })),
     events: events.map((e) => ({
       id: e.id,
       status: e.status,

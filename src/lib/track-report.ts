@@ -2,6 +2,8 @@
 
 export type TrackEvent = { status: string; note: string; created_at: string };
 
+export type TrackItem = { name: string; qty: number; unit_price?: number; line_total?: number };
+
 export type TrackReport = {
   order_no: string;
   status: string;
@@ -15,6 +17,7 @@ export type TrackReport = {
   delivered_at?: string | null;
   last_seen_at?: string | null;
   link?: string;
+  items?: TrackItem[];
   events: TrackEvent[];
   statusLabel: (s: string) => string;
 };
@@ -30,6 +33,18 @@ export function trackReportHtml(r: TrackReport, en = false): string {
   const rows = r.events
     .map(
       (e) => `<tr><td>${esc(dt(e.created_at))}</td><td>${esc(r.statusLabel(e.status))}</td><td>${esc(e.note || "—")}</td></tr>`,
+    )
+    .join("");
+
+  const itemRows = (r.items || [])
+    .map(
+      (it, idx) => `<tr>
+        <td>${idx + 1}</td>
+        <td>${esc(it.name)}</td>
+        <td style="text-align:right">${it.qty}</td>
+        ${it.unit_price != null ? `<td style="text-align:right">৳${Math.round(it.unit_price)}</td>` : ""}
+        ${it.line_total != null ? `<td style="text-align:right">৳${Math.round(it.line_total)}</td>` : ""}
+      </tr>`,
     )
     .join("");
 
@@ -52,7 +67,7 @@ export function trackReportHtml(r: TrackReport, en = false): string {
   .cell{flex:1 1 30%;border:1px solid #e2e8e5;border-radius:10px;padding:8px 10px}
   .cell span{display:block;font-size:11px;color:#5c6b62}
   .cell strong{font-size:13px}
-  table{width:100%;border-collapse:collapse;font-size:12px}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
   th,td{border-bottom:1px solid #e2e8e5;padding:7px 6px;text-align:left;vertical-align:top}
   th{background:#f2f7f4;font-size:11px;text-transform:uppercase;color:#5c6b62}
   footer{margin-top:22px;border-top:1px solid #e2e8e5;padding-top:10px;font-size:11px;color:#5c6b62}
@@ -79,6 +94,16 @@ export function trackReportHtml(r: TrackReport, en = false): string {
   ${info(L("সর্বশেষ অবস্থান আপডেট", "Last location update"), dt(r.last_seen_at))}
   ${info(L("ডেলিভারির সময়", "Delivered at"), dt(r.delivered_at))}
 </div>
+
+${
+  itemRows
+    ? `<h2>${L("অর্ডারকৃত পণ্যসমূহ", "Ordered items")}</h2>
+<table>
+  <thead><tr><th>#</th><th>${L("পণ্য", "Item")}</th><th style="text-align:right">${L("পরিমাণ", "Qty")}</th>${r.items?.some(it => it.unit_price != null) ? `<th style="text-align:right">${L("দর", "Rate")}</th><th style="text-align:right">${L("মোট", "Amount")}</th>` : ""}</tr></thead>
+  <tbody>${itemRows}</tbody>
+</table>`
+    : ""
+}
 
 <h2>${L("ইভেন্ট ইতিহাস", "Event history")}</h2>
 <table>
