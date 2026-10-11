@@ -37,3 +37,4 @@ drizzle/meta
 *.tar.gz
 *.tsbuildinfo
 oushodhwala-main-legacy/
+/cPanel
