@@ -5,12 +5,12 @@ import time
 import pty
 import select
 
-HOST = os.environ.get("CPANEL_HOST", "192.250.235.43")
+HOST = os.environ.get("CPANEL_HOST", "")
 USER = os.environ.get("CPANEL_USER", "")
 PASS = os.environ.get("CPANEL_PASS", "")
 
-if not USER or not PASS:
-    print("[Error] CPANEL_USER and CPANEL_PASS environment variables must be set.")
+if not HOST or not USER or not PASS:
+    print("[Error] CPANEL_HOST, CPANEL_USER and CPANEL_PASS environment variables must be set.")
     exit(1)
 
 def upload_file(local_path, remote_dir, block_mb=2):

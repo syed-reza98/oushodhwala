@@ -457,7 +457,6 @@ export default function PrescriptionReadingPage() {
         setAutoSaving(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [id, draft, meta, user, guestToken, t.en],
   );
 

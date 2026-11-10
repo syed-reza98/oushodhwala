@@ -1,8 +1,12 @@
 import ftplib
+import os
 
-HOST = "192.250.235.43"
-USER = "yessban2"
-PASS = "O5qe6bUi1:@WC8"
+HOST = os.environ.get("CPANEL_HOST", "")
+USER = os.environ.get("CPANEL_USER", "")
+PASS = os.environ.get("CPANEL_PASS", "")
+
+if not HOST or not USER or not PASS:
+    raise SystemExit("[Error] CPANEL_HOST, CPANEL_USER and CPANEL_PASS environment variables must be set.")
 
 ftp = ftplib.FTP(HOST, timeout=30)
 ftp.login(USER, PASS)

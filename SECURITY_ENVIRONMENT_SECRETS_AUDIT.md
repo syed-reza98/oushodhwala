@@ -29,20 +29,20 @@ In the deployment automation scripts, production server credentials are hardcode
 
 - **[`scripts/deploy-all-to-cpanel.py`](file:///home/syed/Workspace/oushodhwala/scripts/deploy-all-to-cpanel.py#L8-L10)**:
   ```python
-  HOST = "192.250.235.43"
-  USER = "yessban2"
-  PASS = "O5qe6bUi1:@WC8"
+  HOST = "<redacted-host>"
+  USER = "<redacted-user>"
+  PASS = "<redacted-password>"
   ```
 - **[`scripts/deploy-app.py`](file:///home/syed/Workspace/oushodhwala/scripts/deploy-app.py#L8-L10)**:
   ```python
-  HOST = "192.250.235.43"
-  USER = "yessban2"
-  PASS = "O5qe6bUi1:@WC8"
+  HOST = "<redacted-host>"
+  USER = "<redacted-user>"
+  PASS = "<redacted-password>"
   ```
 - **[`scripts/upload-images.py`](file:///home/syed/Workspace/oushodhwala/scripts/upload-images.py#L17-L18)**:
   ```python
-  ftp.connect("192.250.235.43", 21)
-  ftp.login("yessban2", "O5qe6bUi1:@WC8")
+  ftp.connect("<redacted-host>", 21)
+  ftp.login("<redacted-user>", "<redacted-password>")
   ```
 
 ---
@@ -56,12 +56,12 @@ $ git ls-files .env
 Inside [`.env`](file:///home/syed/Workspace/oushodhwala/.env):
 - **Database Connection String**:
   ```ini
-  DATABASE_URL="mysql://yessban2_syed:oushodhwala2026@localhost:3306/yessban2_oushodhwala"
+  DATABASE_URL="<redacted-database-url>"
   ```
-  Exposes the live MySQL database user (`yessban2_syed`) and password (`oushodhwala2026`).
+  Exposes the live MySQL database user and password.
 - **Auth Session Encryption Key**:
   ```ini
-  AUTH_SECRET="75y+K65wyLC1k2MvZ5KchR19zpab2QWRRzyHYmp+f9c="
+  AUTH_SECRET="<redacted-auth-secret>"
   ```
   Exposes the secret key used by Auth.js to sign session JWTs and encrypt cookies.
 
@@ -117,7 +117,7 @@ __pycache__/
 Refactor scripts to read credentials from environment variables (`os.environ.get("CPANEL_PASS")`) or a local untracked `.env.deploy` file rather than hardcoding.
 
 ### Remediation 4: Credential Rotation
-Because `O5qe6bUi1:@WC8` and `oushodhwala2026` exist in previous git commits:
+Because exposed credentials exist in previous git commits:
 1. Rotate the cPanel hosting account password.
 2. Update the MySQL database user password in cPanel.
 3. Generate a fresh `AUTH_SECRET` via `openssl rand -base64 32`.

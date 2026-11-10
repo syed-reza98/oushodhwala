@@ -13,12 +13,12 @@ subprocess.run(["tar", "-czf", TAR_PATH, "-C", "storage/uploads", "product-image
 tar_size = os.path.getsize(TAR_PATH) / (1024 * 1024)
 print(f"Archive created: {tar_size:.2f} MB in {time.time() - start_tar:.1f}s")
 
-HOST = os.environ.get("CPANEL_HOST", "192.250.235.43")
+HOST = os.environ.get("CPANEL_HOST", "")
 USER = os.environ.get("CPANEL_USER", "")
 PASS = os.environ.get("CPANEL_PASS", "")
 
-if not USER or not PASS:
-    print("[Error] CPANEL_USER and CPANEL_PASS environment variables must be set.")
+if not HOST or not USER or not PASS:
+    print("[Error] CPANEL_HOST, CPANEL_USER and CPANEL_PASS environment variables must be set.")
     exit(1)
 
 print("Connecting to cPanel FTP...")
