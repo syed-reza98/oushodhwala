@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import Link from "next/link";
+
 import { AdminGlobalSearch } from "@/components/AdminGlobalSearch";
 import { AdminNotifications } from "@/components/AdminNotifications";
 
@@ -36,6 +39,10 @@ import {
   Megaphone,
   Award,
   UserCog,
+  Store,
+  MapPin,
+  ShieldCheck,
+  LayoutGrid,
 } from "lucide-react";
 
 export type AdminNavItem = { id: string; t: string; icon: string };
@@ -43,6 +50,7 @@ export type AdminNavGroup = { label: string; items: AdminNavItem[] };
 
 const ICONS: Record<string, typeof LayoutDashboard> = {
   dash: LayoutDashboard,
+  workspace: LayoutGrid,
   staff: UserCog,
   orders: ShoppingCart,
   inventory: Boxes,
@@ -68,6 +76,9 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   reports: BarChart3,
   campaigns: Megaphone,
   loyalty: Award,
+  branches: Store,
+  zones: MapPin,
+  perms: ShieldCheck,
 };
 
 export function AdminShell({
@@ -138,7 +149,7 @@ export function AdminShell({
         {nav}
         <div className="border-t border-sidebar-border p-3">
           <Link
-            to="/"
+            href="/"
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             <ExternalLink className="h-4 w-4" /> সাইটে ফিরে যান

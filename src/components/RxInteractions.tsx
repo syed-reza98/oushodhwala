@@ -1,10 +1,14 @@
-import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { ShieldAlert, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+"use client";
 
+import { useState } from "react";
+import { ShieldAlert, Loader2, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
-import { checkRxInteractions, type RxInteractionResult } from "@/lib/rx-interactions.functions";
+import {
+  analyzeDrugInteractions,
+  type analyzeDrugInteractions as _unused,
+} from "@/server/actions/prescriptions";
+import type { DrugInteractionResult } from "@/server/ai/gateway";
 
 export type InteractionMed = { name: string; generic?: string; strength?: string };
 
@@ -14,19 +18,22 @@ const TONE: Record<string, { cls: string; bn: string; en: string }> = {
   minor: { cls: "border-border bg-secondary text-muted-foreground", bn: "কম ঝুঁকি", en: "Minor" },
 };
 
-/** নির্বাচিত ঔষধের মধ্যে সম্ভাব্য ইন্টার‍্যাকশন — ঝুঁকির লেভেলসহ */
+/**
+ * AI-powered Drug–Drug Interaction Checker
+ */
 export function RxInteractions({ meds }: { meds: InteractionMed[] }) {
   const t = useT();
-  const check = useServerFn(checkRxInteractions);
   const [loading, setLoading] = useState(false);
-  const [res, setRes] = useState<RxInteractionResult | null>(null);
+  const [res, setRes] = useState<DrugInteractionResult | null>(null);
 
   const run = async () => {
+    if (meds.length < 2) return;
     setLoading(true);
     try {
-      setRes((await check({ data: { meds } })) as RxInteractionResult);
+      const data = await analyzeDrugInteractions(meds);
+      setRes(data);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(e instanceof Error ? e.message : "Interaction check failed");
     } finally {
       setLoading(false);
     }
@@ -39,53 +46,58 @@ export function RxInteractions({ meds }: { meds: InteractionMed[] }) {
       : "minor";
 
   return (
-    <section className="mt-4 rounded-xl border border-border bg-card p-3">
-      <div className="flex items-center gap-2">
-        <ShieldAlert className="h-4 w-4 text-sale" />
-        <h2 className="text-xs font-bold">{t("ঔষধ-ঔষধ ইন্টার‍্যাকশন পরীক্ষা", "Drug–drug interaction check")}</h2>
+    <section className="mt-4 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-sale" />
+          <h2 className="text-xs font-bold">{t("ঔষধ-ঔষধ ইন্টার‍্যাকশন পরীক্ষা (AI)", "Drug–drug interaction check (AI)")}</h2>
+        </div>
         <button
-          onClick={run}
+          type="button"
+          onClick={() => void run()}
           disabled={loading || meds.length < 2}
-          className="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[11px] font-bold disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-[11px] font-bold shadow-xs hover:border-primary/50 disabled:opacity-50"
         >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-          {res ? t("আবার পরীক্ষা", "Re-check") : t("পরীক্ষা করুন", "Check now")}
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> : null}
+          {res ? t("পুনরায় পরীক্ষা", "Re-check") : t("পরীক্ষা করুন", "Check now")}
         </button>
       </div>
 
       {meds.length < 2 && (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          {t("অন্তত দুটি ঔষধ নির্বাচন করলে ইন্টার‍্যাকশন পরীক্ষা করা যাবে।", "Select at least two medicines to run the check.")}
+          {t("অন্তত দুটি ঔষধের তালিকা থাকলে AI দ্বারা সম্ভাব্য প্রতিক্রিয়া পরীক্ষা করা যাবে।", "Select at least two medicines to run interaction analysis.")}
         </p>
       )}
 
       {res && (
-        <>
+        <div className="mt-3 space-y-2">
           {res.interactions.length === 0 ? (
-            <p className="mt-2 rounded-lg bg-primary/10 p-2 text-[11px] font-semibold text-primary">
-              {t("উল্লেখযোগ্য কোনো ইন্টার‍্যাকশন পাওয়া যায়নি।", "No significant interaction found.")}
+            <p className="rounded-lg bg-emerald-500/10 p-2.5 text-[11px] font-semibold text-emerald-600">
+              ✅ {t("উল্লেখযোগ্য কোনো ক্ষতিকর ড্রাগ ইন্টার‍্যাকশন পাওয়া যায়নি।", "No significant harmful drug interactions detected.")}
             </p>
           ) : (
             <>
-              <p className={`mt-2 rounded-lg border p-2 text-[11px] font-bold ${TONE[worst]?.cls}`}>
-                {t.n(res.interactions.length)} {t("সম্ভাব্য ইন্টার‍্যাকশন", "possible interactions")} ·{" "}
-                {t("সর্বোচ্চ", "highest")}: {t(TONE[worst]?.bn ?? "", TONE[worst]?.en ?? "")}
+              <p className={`rounded-lg border p-2 text-[11px] font-bold ${TONE[worst]?.cls}`}>
+                ⚠️ {t.n(res.interactions.length)} {t("সম্ভাব্য ইন্টার‍্যাকশন", "possible interaction(s)")} ·{" "}
+                {t("সর্বোচ্চ ঝুঁকি", "Highest risk")}: {t(TONE[worst]?.bn ?? "", TONE[worst]?.en ?? "")}
               </p>
-              <ul className="mt-2 space-y-2">
+              <ul className="space-y-2">
                 {res.interactions.map((it, i) => {
                   const tone = TONE[it.severity] ?? TONE["minor"]!;
                   return (
-                    <li key={i} className={`rounded-lg border p-2 ${tone.cls}`}>
-                      <p className="text-[11px] font-bold text-foreground">
-                        {it.a} + {it.b}
-                        <span className={`ml-2 rounded-full border px-1.5 py-0.5 text-[10px] ${tone.cls}`}>
+                    <li key={i} className={`rounded-lg border p-2.5 text-[11px] ${tone.cls}`}>
+                      <div className="flex items-center justify-between font-bold text-foreground">
+                        <span>
+                          {it.a} + {it.b}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] ${tone.cls}`}>
                           {t(tone.bn, tone.en)}
                         </span>
-                      </p>
-                      <p className="mt-1 text-[11px] text-foreground/80">{t.en ? it.effectEn || it.effect : it.effect}</p>
-                      {(it.advice || it.adviceEn) && (
-                        <p className="mt-0.5 text-[11px] font-semibold text-foreground">
-                          {t("করণীয়", "What to do")}: {t.en ? it.adviceEn || it.advice : it.advice}
+                      </div>
+                      <p className="mt-1 text-foreground/85 leading-relaxed">{it.effect}</p>
+                      {it.advice && (
+                        <p className="mt-1 font-semibold text-foreground">
+                          {t("পরামর্শ", "Advice")}: {it.advice}
                         </p>
                       )}
                     </li>
@@ -94,8 +106,12 @@ export function RxInteractions({ meds }: { meds: InteractionMed[] }) {
               </ul>
             </>
           )}
-          <p className="mt-2 text-[10px] text-muted-foreground">{t.en ? res.summaryEn || res.summary : res.summary}</p>
-        </>
+          {res.summary && (
+            <p className="text-[10px] text-muted-foreground">
+              ℹ️ {res.summary}
+            </p>
+          )}
+        </div>
       )}
     </section>
   );

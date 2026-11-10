@@ -1,7 +1,18 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { products, type Product } from "@/data/catalog";
+"use client";
 
-export type CartLine = { id: string; qty: number; kind: "product" | "lab"; name: string; price: number };
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Product } from "@/data/catalog";
+
+export type CartLine = {
+  id: string;
+  qty: number;
+  kind: "product" | "lab";
+  name: string;
+  price: number;
+  mrp?: number;
+  imageUrl?: string;
+  en?: string;
+};
 
 export type Order = {
   id: string;
@@ -48,6 +59,7 @@ export const defaultPrefs: DeliveryPrefs = {
 type Store = {
   cart: CartLine[];
   add: (line: Omit<CartLine, "qty">, qty?: number) => void;
+  addMany: (lines: Array<{ line: Omit<CartLine, "qty">; qty: number }>) => void;
   setQty: (id: string, qty: number) => void;
   remove: (id: string) => void;
   clear: () => void;
@@ -65,6 +77,8 @@ type Store = {
   setActiveAddress: (id: string) => void;
   prescriptions: { id: string; name: string; date: string; status: string }[];
   addPrescription: (name: string) => void;
+  attachedPrescriptionId: string | null;
+  setAttachedPrescriptionId: (id: string | null) => void;
   user: { name: string; phone: string } | null;
   login: (name: string, phone: string) => void;
   logout: () => void;
@@ -85,6 +99,7 @@ type Persisted = {
   addresses: Address[];
   activeAddress: string;
   prescriptions: { id: string; name: string; date: string; status: string }[];
+  attachedPrescriptionId: string | null;
   user: { name: string; phone: string } | null;
   couponCode: string | null;
   prefs: DeliveryPrefs;
@@ -99,6 +114,7 @@ const empty: Persisted = {
   ],
   activeAddress: "a1",
   prescriptions: [],
+  attachedPrescriptionId: null,
   user: null,
   couponCode: null,
   prefs: defaultPrefs,
@@ -126,8 +142,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const patch = (u: Partial<Persisted>) => setState((s) => ({ ...s, ...u }));
     const subtotal = state.cart.reduce((t, l) => t + l.price * l.qty, 0);
     const mrpTotal = state.cart.reduce((t, l) => {
-      const pr = products.find((x) => x.id === l.id);
-      return t + (pr ? pr.mrp : l.price) * l.qty;
+      const lineMrp = typeof l.mrp === "number" && l.mrp > 0 ? l.mrp : l.price;
+      return t + lineMrp * l.qty;
     }, 0);
     return {
       cart: state.cart,
@@ -143,6 +159,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ? s.cart.map((l) => (l.id === line.id ? { ...l, qty: l.qty + qty } : l))
               : [...s.cart, { ...line, qty }],
           };
+        }),
+      addMany: (lines) =>
+        setState((s) => {
+          let updated = [...s.cart];
+          for (const item of lines) {
+            const found = updated.find((l) => l.id === item.line.id);
+            if (found) {
+              updated = updated.map((l) =>
+                l.id === item.line.id ? { ...l, qty: l.qty + item.qty } : l
+              );
+            } else {
+              updated.push({ ...item.line, qty: item.qty });
+            }
+          }
+          return { ...s, cart: updated };
         }),
       setQty: (id, qty) =>
         setState((s) => ({
@@ -186,6 +217,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...s.prescriptions,
           ],
         })),
+      attachedPrescriptionId: state.attachedPrescriptionId ?? null,
+      setAttachedPrescriptionId: (id: string | null) => patch({ attachedPrescriptionId: id }),
       user: state.user,
       login: (name, phone) => patch({ user: { name, phone } }),
       logout: () => patch({ user: null }),
@@ -205,9 +238,20 @@ export function useStore() {
   return c;
 }
 
-export const toLine = (pr: Product): Omit<CartLine, "qty"> => ({
+export const toLine = (pr: {
+  id: string;
+  name: string;
+  price: number;
+  mrp?: number;
+  imageUrl?: string;
+  image?: string;
+  en?: string;
+}): Omit<CartLine, "qty"> => ({
   id: pr.id,
   kind: "product",
   name: pr.name,
+  en: pr.en,
   price: pr.price,
+  mrp: pr.mrp ?? pr.price,
+  imageUrl: pr.imageUrl || pr.image || "",
 });

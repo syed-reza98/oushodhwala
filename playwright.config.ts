@@ -1,12 +1,11 @@
 import { existsSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
 
-// স্যান্ডবক্সে প্রি-ইনস্টল করা ক্রোমিয়াম থাকলে সেটিই ব্যবহার করা হয়
 const LOCAL_CHROME = "/opt/ms-playwright/chromium-1194/chrome-linux/chrome";
 const executablePath =
   process.env["E2E_CHROME_PATH"] ?? (existsSync(LOCAL_CHROME) ? LOCAL_CHROME : undefined);
 
-/** ঔষধওয়ালা — মূল ইউজার ফ্লোর অটোমেটেড E2E টেস্ট */
+/** ঔষধওয়ালা — Next.js 16 + MySQL smoke e2e */
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
@@ -17,13 +16,21 @@ export default defineConfig({
   reporter: [
     ["list"],
     ["html", { outputFolder: "playwright-report", open: "never" }],
-    ["json", { outputFile: "playwright-report/test-results.json" }]
+    ["json", { outputFile: "playwright-report/test-results.json" }],
   ],
   use: {
-    baseURL: process.env["E2E_BASE_URL"] ?? "http://localhost:8080",
+    baseURL: process.env["E2E_BASE_URL"] ?? "http://127.0.0.1:3000",
     trace: "retain-on-failure",
     viewport: { width: 1280, height: 900 },
   },
+  webServer: process.env["E2E_BASE_URL"]
+    ? undefined
+    : {
+        command: "npm run start -- -p 3000 -H 127.0.0.1",
+        url: "http://127.0.0.1:3000/api/public/health",
+        reuseExistingServer: !process.env["CI"],
+        timeout: 120_000,
+      },
   projects: [
     {
       name: "chromium",

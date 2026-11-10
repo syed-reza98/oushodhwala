@@ -30,6 +30,7 @@ test.describe("account and appointments", () => {
   test("public api health endpoint responds", async ({ request }) => {
     const res = await request.get("/api/public/health");
     expect(res.status()).toBe(200);
-    expect((await res.json()).status).toBe("ok");
+    const body = await res.json();
+    expect(body.ok === true || body.status === "ok").toBeTruthy();
   });
 });

@@ -1,3 +1,5 @@
+"use client";
+
 import { SectionTitle } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { useCatalog } from "@/lib/catalog-db";

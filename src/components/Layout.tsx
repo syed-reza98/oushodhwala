@@ -1,4 +1,7 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import {
   ShoppingCart,
@@ -35,7 +38,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { count, addresses, activeAddress, wishlist } = useStore();
   const { lang, setLang } = useLang();
   const t = useT();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = usePathname();
   const addr = addresses.find((a) => a.id === activeAddress) ?? addresses[0];
 
   useEffect(() => { installErrorLogger(); }, []);
@@ -90,7 +93,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="mx-auto max-w-7xl px-4 py-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3 lg:flex lg:gap-6">
             <MobileMenu />
-            <Link to="/" className="flex min-w-0 items-center" aria-label={t("ঔষধওয়ালা", "Oushodhwala")}>
+            <Link href="/" className="flex min-w-0 items-center" aria-label={t("ঔষধওয়ালা", "Oushodhwala")}>
               <BrandLogo size={40} bn={t("ঔষধওয়ালা", "Oushodhwala")} eager />
             </Link>
 
@@ -123,7 +126,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </div>
 
 
-              <Link to="/wishlist" className="relative hidden text-navy sm:block" aria-label={t("উইশলিস্ট", "Wishlist")}>
+              <Link href="/wishlist" className="relative hidden text-navy sm:block" aria-label={t("উইশলিস্ট", "Wishlist")}>
                 <Heart className="h-5 w-5" />
                 {wishlist.length > 0 && (
                   <span className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-sale text-[10px] font-bold text-sale-foreground">
@@ -131,10 +134,10 @@ export function Layout({ children }: { children: ReactNode }) {
                   </span>
                 )}
               </Link>
-              <Link to="/notifications" className="hidden text-navy sm:block" aria-label={t("নোটিফিকেশন", "Notifications")}>
+              <Link href="/notifications" className="hidden text-navy sm:block" aria-label={t("নোটিফিকেশন", "Notifications")}>
                 <Bell className="h-5 w-5" />
               </Link>
-              <Link to="/cart" className="relative text-navy" aria-label={t("কার্ট", "Cart")}>
+              <Link href="/cart" className="relative text-navy" aria-label={t("কার্ট", "Cart")}>
                 <ShoppingCart className="h-5 w-5" />
                 {count > 0 && (
                   <span className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-sale text-[10px] font-bold text-sale-foreground">
@@ -175,22 +178,22 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="text-xs">
               <p className="mb-3 font-display text-sm font-bold">{t("সেবা", "Services")}</p>
               <ul className="space-y-2 opacity-75">
-                <li><Link to="/prescription" className="hover:opacity-100">{t("প্রেসক্রিপশন আপলোড", "Upload prescription")}</Link></li>
-                <li><Link to="/lab-test" className="hover:opacity-100">{t("ল্যাব টেস্ট", "Lab test")}</Link></li>
-                <li><Link to="/doctor-consultation" className="hover:opacity-100">{t("ডাক্তার পরামর্শ", "Doctor consultation")}</Link></li>
-                <li><Link to="/offers" className="hover:opacity-100">{t("অফার ও ক্যাম্পেইন", "Offers & campaigns")}</Link></li>
+                <li><Link href="/prescription" className="hover:opacity-100">{t("প্রেসক্রিপশন আপলোড", "Upload prescription")}</Link></li>
+                <li><Link href="/lab-test" className="hover:opacity-100">{t("ল্যাব টেস্ট", "Lab test")}</Link></li>
+                <li><Link href="/doctor-consultation" className="hover:opacity-100">{t("ডাক্তার পরামর্শ", "Doctor consultation")}</Link></li>
+                <li><Link href="/offers" className="hover:opacity-100">{t("অফার ও ক্যাম্পেইন", "Offers & campaigns")}</Link></li>
               </ul>
             </div>
             <div className="text-xs">
               <p className="mb-3 font-display text-sm font-bold">{t("কোম্পানি", "Company")}</p>
               <ul className="space-y-2 opacity-75">
-                <li><Link to="/about" className="hover:opacity-100">{t("আমাদের সম্পর্কে", "About us")}</Link></li>
-                <li><Link to="/contact" className="hover:opacity-100">{t("যোগাযোগ", "Contact us")}</Link></li>
-                <li><Link to="/help" className="hover:opacity-100">{t("সহায়তা ও FAQ", "Help & FAQ")}</Link></li>
-                <li><Link to="/orders" className="hover:opacity-100">{t("অর্ডার ট্র্যাকিং", "Order tracking")}</Link></li>
-                <li><Link to="/privacy" className="hover:opacity-100">{t("গোপনীয়তা নীতি", "Privacy policy")}</Link></li>
-                <li><Link to="/terms" className="hover:opacity-100">{t("শর্তাবলী", "Terms of service")}</Link></li>
-                <li><Link to="/refund-policy" className="hover:opacity-100">{t("রিটার্ন ও রিফান্ড", "Return & refund")}</Link></li>
+                <li><Link href="/about" className="hover:opacity-100">{t("আমাদের সম্পর্কে", "About us")}</Link></li>
+                <li><Link href="/contact" className="hover:opacity-100">{t("যোগাযোগ", "Contact us")}</Link></li>
+                <li><Link href="/help" className="hover:opacity-100">{t("সহায়তা ও FAQ", "Help & FAQ")}</Link></li>
+                <li><Link href="/orders" className="hover:opacity-100">{t("অর্ডার ট্র্যাকিং", "Order tracking")}</Link></li>
+                <li><Link href="/privacy" className="hover:opacity-100">{t("গোপনীয়তা নীতি", "Privacy policy")}</Link></li>
+                <li><Link href="/terms" className="hover:opacity-100">{t("শর্তাবলী", "Terms of service")}</Link></li>
+                <li><Link href="/refund-policy" className="hover:opacity-100">{t("রিটার্ন ও রিফান্ড", "Return & refund")}</Link></li>
               </ul>
             </div>
 
@@ -221,7 +224,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {!hideFab && (
         <Link
-          to="/prescription"
+          href="/prescription"
           aria-label={t("প্রেসক্রিপশন আপলোড", "Upload prescription")}
           className="fixed bottom-24 right-4 z-20 flex items-center gap-2 rounded-full bg-primary p-3.5 text-xs font-semibold text-primary-foreground shadow-[var(--shadow-elevated)] sm:px-4 sm:py-3 lg:bottom-6"
         >
@@ -236,7 +239,7 @@ export function Layout({ children }: { children: ReactNode }) {
             return (
               <Link
                 key={label}
-                to={to}
+                href={to}
                 className={`flex flex-col items-center gap-0.5 px-3 ${active ? "text-primary" : "text-muted-foreground"}`}
               >
                 <Icon className="h-5 w-5" />
@@ -258,7 +261,7 @@ export function SectionTitle({ title, to, label }: { title: string; to?: string;
         <span className="mt-1 block h-1 w-10 rounded-full bg-primary" />
       </div>
       {to && (
-        <Link to={to} className="ml-auto flex shrink-0 items-center text-xs font-semibold text-primary">
+        <Link href={to} className="ml-auto flex shrink-0 items-center text-xs font-semibold text-primary">
           {label ?? "See all"} <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       )}

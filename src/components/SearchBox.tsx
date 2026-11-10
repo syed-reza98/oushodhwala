@@ -1,5 +1,9 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+
 import { useQuery } from "@tanstack/react-query";
 import { Search, X, Clock, TrendingUp, Loader2, CornerDownLeft, HomeIcon, RefreshCw } from "lucide-react";
 import { searchProducts } from "@/lib/catalog.functions";
@@ -40,7 +44,7 @@ function readRecent(): string[] {
 }
 
 export function SearchBox({ className = "" }: { className?: string }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { lang } = useLang();
   const en = lang === "en";
   const [q, setQ] = useState("");
@@ -95,8 +99,35 @@ export function SearchBox({ className = "" }: { className?: string }) {
   const showSkeleton = isFetching && !data;
 
   const rows = useMemo(() => {
-    if (!enabled || scope === "service") return [];
-    const list = [...(data?.rows ?? [])];
+    if (!enabled || scope === "service")
+      return [] as {
+        id: string;
+        name: string;
+        en?: string;
+        brand?: string;
+        generic?: string;
+        price?: number;
+        image?: string;
+        emoji?: string;
+        strength?: string;
+        form?: string;
+        medicineImage?: string;
+        rx?: boolean;
+      }[];
+    const list = (data?.rows ?? []).map((r) => ({
+      id: String(r.id ?? ""),
+      name: String(r.name ?? ""),
+      en: String(r.en ?? ""),
+      brand: String(r.brand ?? ""),
+      generic: String(r.generic ?? ""),
+      price: Number(r.price ?? 0),
+      image: String(r.imageUrl ?? r.image_url ?? r.image ?? ""),
+      medicineImage: String(r.medicineImageUrl ?? r.medicine_image_url ?? ""),
+      emoji: String(r.emoji ?? "💊"),
+      strength: String(r.strength ?? ""),
+      form: String(r.form ?? ""),
+      rx: Boolean((r as { rx?: boolean }).rx),
+    }));
     list.sort(
       (a, b) =>
         relevance(debounced, a.name, a.en, a.brand, a.generic) - relevance(debounced, b.name, b.en, b.brand, b.generic),
@@ -130,22 +161,23 @@ export function SearchBox({ className = "" }: { className?: string }) {
     saveTerm(t);
     setOpen(false);
     setActive(-1);
-    navigate({ to: "/products", search: { q: t, category: "all", sort: "popular" } });
+    const p = new URLSearchParams({ q: t, category: "all", sort: "popular" });
+    router.push(`/products?${p.toString()}`);
   };
 
   const goProduct = (id: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    navigate({ to: "/product/$id", params: { id } });
+    router.push(`/product/${encodeURIComponent(id)}`);
   };
 
   const goService = (slug: string, route: string, term: string) => {
     saveTerm(term);
     setOpen(false);
     setActive(-1);
-    if (route === "/home-diagnostics") void navigate({ to: "/home-diagnostics" });
-    else void navigate({ to: "/home-services", search: { s: slug } });
+    if (route === "/home-diagnostics") router.push("/home-diagnostics");
+    else router.push(`/home-services?s=${encodeURIComponent(slug)}`);
   };
 
   const total = rows.length + services.length;
@@ -313,7 +345,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
                   >
                     <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-lg">
                       <ProductImage
-                        src={r.medicine_image_url || r.image_url}
+                        src={r.medicineImage || r.image}
                         alt={r.name}
                         emoji={r.emoji}
                         ratio="square"
@@ -321,9 +353,16 @@ export function SearchBox({ className = "" }: { className?: string }) {
                     </span>
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-bold text-navy">{pick(lang, r.name, r.en)}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="truncate text-xs font-bold text-navy">{pick(lang, r.name, r.en)}</span>
+                        {r.rx && (
+                          <span className="shrink-0 rounded bg-primary-dark px-1 py-0.5 text-[8px] font-bold text-primary-foreground leading-none">
+                            Rx
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-[10px] text-muted-foreground">
-                        {[r.strength, r.form, r.brand].filter(Boolean).join(" · ")}
+                        {[r.generic ? `(${r.generic})` : null, r.strength, r.form, r.brand].filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     <span className="shrink-0 text-xs font-extrabold text-primary">৳{bn(Number(r.price))}</span>
@@ -454,7 +493,7 @@ export function SearchBox({ className = "" }: { className?: string }) {
                 ))}
               </div>
               <Link
-                to="/categories"
+                href="/categories"
                 onClick={() => setOpen(false)}
                 className="mt-2 block rounded-xl bg-secondary py-2 text-center text-[11px] font-bold text-primary"
               >

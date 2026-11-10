@@ -1,5 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
-
 export const CONSULT_BUCKET = "consultations";
 
 export type CallMode = "phone" | "whatsapp" | "video";
@@ -80,7 +78,19 @@ export function slotTimes(av?: Partial<DoctorAvailability>): string[] {
 }
 
 export function isWorkingDay(d: Date, av?: Partial<DoctorAvailability>) {
-  const days = av?.workDays ?? [0, 1, 2, 3, 4, 5, 6];
+  const raw = av?.workDays ?? [0, 1, 2, 3, 4, 5, 6];
+  const days = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? (() => {
+          try {
+            const parsed = JSON.parse(raw) as unknown;
+            return Array.isArray(parsed) ? (parsed as number[]) : [0, 1, 2, 3, 4, 5, 6];
+          } catch {
+            return [0, 1, 2, 3, 4, 5, 6];
+          }
+        })()
+      : [0, 1, 2, 3, 4, 5, 6];
   return days.includes(d.getDay());
 }
 
@@ -146,13 +156,16 @@ export function telNumber(v: string) {
 export async function uploadConsultFile(userId: string, appointmentId: string, file: File) {
   const safe = file.name.replace(/[^\w.\-]/g, "_");
   const path = `${userId}/${appointmentId}/${Date.now()}-${safe}`;
-  const { error } = await supabase.storage.from(CONSULT_BUCKET).upload(path, file);
-  if (error) throw error;
-  return { path, name: file.name };
+  const fd = new FormData();
+  fd.set("bucket", CONSULT_BUCKET);
+  fd.set("file", file);
+  const res = await fetch("/api/upload", { method: "POST", body: fd });
+  if (!res.ok) throw new Error("consult upload failed");
+  const saved = (await res.json()) as { path?: string };
+  return { path: saved.path || path, name: file.name };
 }
 
 export async function openConsultFile(path: string) {
-  const { data, error } = await supabase.storage.from(CONSULT_BUCKET).createSignedUrl(path, 600);
-  if (error) throw error;
-  window.open(data.signedUrl, "_blank", "noopener");
+  const url = path.startsWith("http") ? path : `/uploads/${path.replace(/^\/+/, "")}`;
+  window.open(url, "_blank", "noopener");
 }

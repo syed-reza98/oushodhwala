@@ -18,7 +18,7 @@ export type RxImageQuality = {
 /** এই সীমার নিচে হলে ছবি বাতিল */
 export const RX_MIN_SHARPNESS = 45;
 export const RX_MIN_CONTRAST = 0.12;
-export const RX_MIN_SIDE = 480;
+export const RX_MIN_SIDE = 360;
 
 const loadBitmap = (file: File): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -123,8 +123,8 @@ export function rxQualityMessage(q: RxImageQuality, en: boolean): string {
   switch (q.reason) {
     case "small":
       return en
-        ? `Image is too small (${q.width}×${q.height}px). Take the photo closer, at least 480px on each side.`
-        : `ছবিটি খুব ছোট (${q.width}×${q.height}px)। কাছ থেকে আবার তুলুন — প্রতিটি দিক অন্তত ৪৮০px হওয়া দরকার।`;
+        ? `Image is too small (${q.width}×${q.height}px). Take the photo closer, at least 360px on each side.`
+        : `ছবিটি খুব ছোট (${q.width}×${q.height}px)। কাছ থেকে আবার তুলুন — প্রতিটি দিক অন্তত ৩৬০px হওয়া দরকার।`;
     case "blurry":
       return en
         ? "The photo looks blurry. Hold the phone steady, tap to focus on the writing, then retake."

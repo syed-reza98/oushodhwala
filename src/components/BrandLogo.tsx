@@ -19,7 +19,7 @@ export function BrandLogo({
   return (
     <span className={`flex min-w-0 items-center gap-2 ${className}`}>
       <img
-        src={mark}
+        src={typeof mark === "string" ? mark : mark.src}
         alt="Oushodhwala logo"
         width={size}
         height={size}

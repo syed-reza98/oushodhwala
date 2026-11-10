@@ -1,38 +1,54 @@
-/** ব্রাউজার এরর রেকর্ডার — এরর লগ ড্যাশবোর্ডে দেখা যায় */
-import { supabase } from "@/integrations/supabase/client";
-
+/** Client error logger — posts to MySQL via /api/public/error-logs (best-effort). */
 let installed = false;
-const seen = new Set<string>();
 
-async function log(message: string, stack: string, severity: "error" | "warning") {
-  const key = `${severity}:${message}`.slice(0, 200);
-  if (!message || seen.has(key)) return;
-  seen.add(key);
+function report(payload: {
+  message: string;
+  source?: string;
+  path?: string;
+  stack?: string;
+  severity?: string;
+}) {
+  console.error("[ow]", payload.message);
   try {
-    const { data } = await supabase.auth.getUser();
-    await supabase.from("error_logs").insert({
-      message: message.slice(0, 500),
-      stack: stack.slice(0, 2000),
-      severity,
-      source: "client",
-      path: window.location.pathname,
-      user_id: data.user?.id ?? null,
+    const body = JSON.stringify({
+      message: payload.message,
+      source: payload.source ?? "client",
+      path: payload.path ?? (typeof window !== "undefined" ? window.location.pathname : ""),
+      stack: payload.stack,
+      severity: payload.severity ?? "error",
     });
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const blob = new Blob([body], { type: "application/json" });
+      navigator.sendBeacon("/api/public/error-logs", blob);
+      return;
+    }
+    void fetch("/api/public/error-logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {});
   } catch {
-    /* লগ করতে ব্যর্থ হলে অ্যাপ থামানো যাবে না */
+    /* ignore */
   }
 }
 
 export function installErrorLogger() {
   if (installed || typeof window === "undefined") return;
   installed = true;
-
   window.addEventListener("error", (e) => {
-    void log(e.message || String(e.error), e.error?.stack ?? "", "error");
+    report({
+      message: e.message || "window.error",
+      source: "window.error",
+      stack: e.error instanceof Error ? e.error.stack : undefined,
+    });
   });
   window.addEventListener("unhandledrejection", (e) => {
-    const r = e.reason as { message?: string; stack?: string } | string | undefined;
-    const msg = typeof r === "string" ? r : (r?.message ?? "Unhandled promise rejection");
-    void log(msg, typeof r === "object" ? (r?.stack ?? "") : "", "error");
+    const reason = e.reason;
+    report({
+      message: reason instanceof Error ? reason.message : String(reason),
+      source: "unhandledrejection",
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
   });
 }
